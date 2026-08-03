@@ -138,7 +138,7 @@ class Menu {
         let input = document.createElement('input');
         input.type = 'text';
         input.id = 'searchField';
-        input.placeholder = 'Search';
+        input.placeholder = 'Поиск';
         /** Creating a search button */
         let searchButton = document.createElement('button');
         searchButton.type = 'button';
@@ -176,16 +176,16 @@ class Menu {
         /** Adding options */
         let defaultOption = document.createElement('option');
         defaultOption.value = 'all';
-        defaultOption.textContent = 'Everywhere';
+        defaultOption.textContent = 'Везде';
         select.appendChild(defaultOption);
 
         /** Adding options */
         const options = [
-            { value: 'dbname', text: 'Database' },
-            { value: 'username', text: 'User' },
-            { value: 'relname', text: 'Table' },
-            { value: 'indexrelname', text: 'Index' },
-            { value: 'querytext', text: 'Query' }
+            { value: 'dbname', text: 'База данных' },
+            { value: 'username', text: 'Пользователь' },
+            { value: 'relname', text: 'Таблица' },
+            { value: 'indexrelname', text: 'Индекс' },
+            { value: 'querytext', text: 'Запрос' }
         ];
 
         options.forEach(option => {

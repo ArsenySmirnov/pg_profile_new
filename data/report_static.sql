@@ -21,12 +21,12 @@ $js$
 ),
 ('report',
   '<!DOCTYPE html>'
-  '<html lang="en"><head>'
+  '<html lang="ru"><head><meta charset="UTF-8">'
   '<style>{static:css}</style>'
   '<script>const logoFile=`{static:logo}`</script>'
   '<script>const logoMiniFile=`{static:logo_mini}`</script>'
   '<script>const data={dynamic:data1}</script>'
-  '<title>Postgres profile report ({properties:start1_id} -'
+  '<title>Отчёт Postgres profile ({properties:start1_id} -'
   ' {properties:end1_id})</title></head><body>'
   '<div id="container">'
   '</div>'
@@ -34,13 +34,13 @@ $js$
   '</body></html>'),
 ('diffreport',
   '<!DOCTYPE html>'
-  '<html lang="en"><head>'
+  '<html lang="ru"><head><meta charset="UTF-8">'
   '<style>{static:css}</style>'
   '<script>const logoFile=`{static:logo}`</script>'
   '<script>const logoMiniFile=`{static:logo_mini}`</script>'
   '<script>const data={dynamic:data1}</script>'
-  '<title>Postgres profile differential report (1): ({properties:start1_id} -'
-  ' {properties:end1_id}) with (2): ({properties:start2_id} -'
+  '<title>Сравнительный отчёт Postgres profile (1): ({properties:start1_id} -'
+  ' {properties:end1_id}) и (2): ({properties:start2_id} -'
   ' {properties:end2_id})</title></head><body>'
   '<div id="container">'
   '</div>'

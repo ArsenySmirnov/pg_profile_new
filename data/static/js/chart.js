@@ -70,7 +70,7 @@ class PipeChart extends BaseChart {
             let remainingWidth = 100 - totalWidth;
             nestedSvg += `
                 <svg class="lineSvg" height="2em" width="${remainingWidth}%" x="${x}%">
-                    <title>Others (${remainingWidth}%)</title>
+                    <title>Остальные (${remainingWidth}%)</title>
                     <line opacity="0.4" x1="0" y1="80%" x2="100%" y2="80%" stroke="#8898AE" stroke-width="4px"></line>
                 </svg>
             `;
@@ -193,7 +193,7 @@ class SessionChart extends BaseChart {
         let inputFields = document.createElement('div');
         let inputFieldsHeader = document.createElement('p');
         let inputFieldsRanges = document.createElement('div');
-        inputFieldsHeader.innerHTML = 'Duration threshold (sec.):';
+        inputFieldsHeader.innerHTML = 'Порог длительности (с):';
         inputFieldsRanges.style.display = 'flex';
         inputFieldsRanges.style.width = `${document.documentElement.offsetWidth ? 0.85 * document.documentElement.offsetWidth : 1520}px`;
         inputFieldsRanges.style.justifyContent = 'space-around';
@@ -235,7 +235,7 @@ class SessionChart extends BaseChart {
         thresholdBackendInput.style.width = '200px';
 
         let thresholdBackendName = document.createElement('span');
-        thresholdBackendName.innerHTML = `Backend: ${thresholdBackendInput.value}`;
+        thresholdBackendName.innerHTML = `Серверный процесс: ${thresholdBackendInput.value}`;
         thresholdBackendField.appendChild(thresholdBackendInput);
         thresholdBackendField.appendChild(thresholdBackendName);
 
@@ -251,7 +251,7 @@ class SessionChart extends BaseChart {
         thresholdXactInput.style.width = '200px';
 
         let thresholdXactName = document.createElement('span');
-        thresholdXactName.innerHTML = `Xact: ${thresholdXactInput.value}`;
+        thresholdXactName.innerHTML = `Транзакция: ${thresholdXactInput.value}`;
         thresholdXactField.appendChild(thresholdXactInput);
         thresholdXactField.appendChild(thresholdXactName);
 
@@ -267,7 +267,7 @@ class SessionChart extends BaseChart {
         thresholdStateInput.style.width = '200px';
 
         let thresholdStateName = document.createElement('span');
-        thresholdStateName.innerHTML = `State: ${thresholdStateInput.value}`;
+        thresholdStateName.innerHTML = `Состояние: ${thresholdStateInput.value}`;
         thresholdStateField.appendChild(thresholdStateInput);
         thresholdStateField.appendChild(thresholdStateName);
 
@@ -281,9 +281,9 @@ class SessionChart extends BaseChart {
                 let thresholdXactValue = document.getElementById('thresholdXactField').firstChild.value;
                 let thresholdStateValue = document.getElementById('thresholdStateField').firstChild.value;
 
-                document.getElementById('thresholdBackendField').childNodes[1].innerHTML = `Backend: ${thresholdBackendValue}`;
-                document.getElementById('thresholdXactField').childNodes[1].innerHTML = `Xact: ${thresholdXactValue}`;
-                document.getElementById('thresholdStateField').childNodes[1].innerHTML = `State: ${thresholdStateValue}`;
+                document.getElementById('thresholdBackendField').childNodes[1].innerHTML = `Серверный процесс: ${thresholdBackendValue}`;
+                document.getElementById('thresholdXactField').childNodes[1].innerHTML = `Транзакция: ${thresholdXactValue}`;
+                document.getElementById('thresholdStateField').childNodes[1].innerHTML = `Состояние: ${thresholdStateValue}`;
 
                 mainNode.remove();
                 div.insertAdjacentElement('afterend', new SessionChart().init(newBlock, thresholdBackendValue, thresholdXactValue, thresholdStateValue))
@@ -425,8 +425,8 @@ class SessionChart extends BaseChart {
             /** Drawing rectangle with backend */
             let title = '';
             title += `PID: ${backendObj.pid}\n`;
-            title += `Backend start: ${new Date(backendObj.start_ut * 1000)}\n`;
-            title += `Backend duration: ${Math.round(backendObj.duration * 100) / 100} sec`;
+            title += `Начало серверного процесса: ${new Date(backendObj.start_ut * 1000)}\n`;
+            title += `Длительность серверного процесса: ${Math.round(backendObj.duration * 100) / 100} с`;
 
             let backendSVG = this.drawRect(backendObj, reportStartUT, proportion, backendObj['chart_line'], this.colours[2], this.colours[17], title, 'backend');
             /** Drawing PID */
@@ -439,10 +439,10 @@ class SessionChart extends BaseChart {
                 let xactObj = backendObj.xacts[xact];
                 let title = '';
                 title += `PID: ${xactObj.pid}\n`;
-                title += `Xact start: ${new Date(xactObj.start_ut * 1000)} \n`;
-                title += `Xact duration: ${Math.round(xactObj.duration * 100) / 100} sec \n`;
-                title += `Backend start: ${new Date(backendObj.start_ut * 1000)} \n`;
-                title += `Backend duration: ${Math.round(backendObj.duration * 100) / 100} sec`;
+                title += `Начало транзакции: ${new Date(xactObj.start_ut * 1000)} \n`;
+                title += `Длительность транзакции: ${Math.round(xactObj.duration * 100) / 100} с \n`;
+                title += `Начало серверного процесса: ${new Date(backendObj.start_ut * 1000)} \n`;
+                title += `Длительность серверного процесса: ${Math.round(backendObj.duration * 100) / 100} с`;
 
                 let xactSVG = this.drawRect(xactObj, reportStartUT, proportion, backendObj['chart_line'], this.colours[2], this.colours[17], title, 'xact');
 
@@ -459,14 +459,14 @@ class SessionChart extends BaseChart {
                     }
                     let title = '';
                     title += `PID: ${stateChangeObj.pid} \n`;
-                    title += `State: ${stateChangeObj.state} \n`;
-                    title += `Query ID: ${stateChangeObj.queryid}\n`;
-                    title += `State start: ${new Date(stateChangeObj.start_ut * 1000)} \n`;
-                    title += `State duration: ${Math.round(stateChangeObj.duration * 100) / 100} sec \n`;
-                    title += `Xact start: ${new Date(xactObj.start_ut * 1000)} \n`;
-                    title += `Xact duration: ${Math.round(xactObj.duration * 100) / 100} sec \n`;
-                    title += `Backend start: ${new Date(backendObj.start_ut * 1000)} \n`;
-                    title += `Backend duration: ${Math.round(backendObj.duration * 100) / 100} sec`;
+                    title += `Состояние: ${stateChangeObj.state} \n`;
+                    title += `Идентификатор запроса: ${stateChangeObj.queryid}\n`;
+                    title += `Начало состояния: ${new Date(stateChangeObj.start_ut * 1000)} \n`;
+                    title += `Длительность состояния: ${Math.round(stateChangeObj.duration * 100) / 100} с \n`;
+                    title += `Начало транзакции: ${new Date(xactObj.start_ut * 1000)} \n`;
+                    title += `Длительность транзакции: ${Math.round(xactObj.duration * 100) / 100} с \n`;
+                    title += `Начало серверного процесса: ${new Date(backendObj.start_ut * 1000)} \n`;
+                    title += `Длительность серверного процесса: ${Math.round(backendObj.duration * 100) / 100} с`;
 
                     /** dataObj, reportStartUT, proportion, num, strokeColour, fillColour, title, klass */
                     let stateChangeSVG = this.drawRect(

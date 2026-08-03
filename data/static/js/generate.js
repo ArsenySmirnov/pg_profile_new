@@ -461,7 +461,7 @@ class BaseTable extends BaseSection {
         const TITLES = {
             'properties.timePeriod1': `(${BaseTable.properties.report_start1} - ${BaseTable.properties.report_end1})`,
             'properties.timePeriod2': `(${BaseTable.properties.report_start2} - ${BaseTable.properties.report_end2})`,
-            'properties.timePeriod1,properties.timePeriod2': 'Sample\'s time period'
+            'properties.timePeriod1,properties.timePeriod2': 'Период времени снимка'
         }
         if (TITLES[title] !== undefined) {
             return TITLES[title];
