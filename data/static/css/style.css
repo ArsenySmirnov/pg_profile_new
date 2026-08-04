@@ -257,6 +257,59 @@ option:first-child {
     padding: 3px;
 }
 
+.blocking-menu-root-link {
+    display: flex !important;
+    align-items: center;
+    gap: 0.45em;
+}
+
+.blocking-menu-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5em;
+    height: 1.5em;
+    padding: 0 0.35em;
+    border-radius: 999px;
+    background-color: #d9534f;
+    color: white;
+    font-size: 0.72em;
+    line-height: 1;
+}
+
+#pageContent div.blocking-menu-entry {
+    display: block;
+    padding-top: 0.25em;
+}
+
+.blocking-menu-entry a {
+    border-left: 2px solid #d9534f !important;
+    padding-left: 0.55em !important;
+}
+
+.blocking-menu-entry-title,
+.blocking-menu-entry-meta {
+    display: block;
+}
+
+.blocking-menu-entry-title {
+    font-weight: 600;
+}
+
+.blocking-menu-entry-meta {
+    margin-top: 0.15em;
+    color: #596a7d;
+    font-size: 0.76em;
+    line-height: 1.25;
+}
+
+.blocking-menu-limit {
+    padding: 0.5em 0 0.25em 1em;
+    color: #596a7d;
+    font-size: 0.72em;
+    font-weight: 400;
+}
+
 select {
     margin-top: 8px;
     border: 0;

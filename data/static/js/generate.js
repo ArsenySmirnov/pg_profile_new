@@ -891,6 +891,45 @@ class VerticalTable extends BaseTable {
 }
 
 class LockTree {
+    static getRowByNodeId(nodeId) {
+        return Array.from(document.querySelectorAll('table.lock-tree tr.lock-tree-row'))
+            .find(row => row.getAttribute('data-node_id') === nodeId);
+    }
+
+    static expandBranch(nodeId) {
+        let rootRow = LockTree.getRowByNodeId(nodeId);
+        if (!rootRow) {
+            return null;
+        }
+
+        let rows = Array.from(rootRow.closest('table').querySelectorAll('tr.lock-tree-row'));
+        let children = new Map();
+        rows.forEach(row => {
+            let parentId = row.getAttribute('data-parent_node_id');
+            if (parentId && parentId !== 'null') {
+                if (!children.has(parentId)) {
+                    children.set(parentId, []);
+                }
+                children.get(parentId).push(row);
+            }
+        });
+
+        const expand = row => {
+            row.classList.remove('lock-tree-hidden');
+            let button = row.querySelector('.lock-tree-toggle');
+            if (button) {
+                button.setAttribute('aria-expanded', 'true');
+                button.setAttribute('title', 'Свернуть ветвь');
+                button.textContent = '▾';
+            }
+            let currentNodeId = row.getAttribute('data-node_id');
+            (children.get(currentNodeId) || []).forEach(expand);
+        };
+
+        expand(rootRow);
+        return rootRow;
+    }
+
     static init() {
         document.querySelectorAll('table.lock-tree').forEach(table => {
             let rows = Array.from(table.querySelectorAll('tr.lock-tree-row'));

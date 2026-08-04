@@ -95,6 +95,128 @@ class Menu {
         return parentNode;
     }
 
+    static formatBlockingObservationTime(observedAt) {
+        let match = String(observedAt || '').match(
+            /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}:\d{2}:\d{2})/
+        );
+        if (!match) {
+            return observedAt || 'Время не определено';
+        }
+        return `${match[3]}.${match[2]} ${match[4]}`;
+    }
+
+    static buildBlockingTreeMenu() {
+        const MAX_MENU_ITEMS = 20;
+        let dataset = data.datasets?.blocking_tree;
+        let menuLink = document.getElementById('menu_blocking_tree');
+
+        if (!Array.isArray(dataset) || !dataset.length || !menuLink) {
+            return;
+        }
+
+        let roots = dataset.filter(row => Number(row.depth) === 0);
+        if (!roots.length) {
+            return;
+        }
+
+        let rootContainer = menuLink.closest('.level1');
+        let title = menuLink.parentElement;
+        let nestedDiv = document.createElement('div');
+        nestedDiv.classList.add('nested-sections', 'blocking-menu-items', 'hidden');
+
+        const uniqueSessionCount = rows => new Set(rows.map(row =>
+            `${row.interval_num || ''}|${row.observed_at || ''}|${row.pid}`
+        )).size;
+        let totalWaiters = uniqueSessionCount(
+            dataset.filter(row => Number(row.depth) > 0)
+        );
+        let badge = document.createElement('span');
+        badge.classList.add('blocking-menu-badge');
+        badge.textContent = totalWaiters;
+        badge.title = `Ожидающих сеансов во всех наблюдениях: ${totalWaiters}`;
+        menuLink.classList.add('blocking-menu-root-link');
+        menuLink.appendChild(badge);
+
+        let visibleRoots = roots.slice(-MAX_MENU_ITEMS).reverse();
+        visibleRoots.forEach((root, index) => {
+            let rootNodeId = root.node_id;
+            let rootRow = LockTree.getRowByNodeId(rootNodeId);
+            if (!rootRow) {
+                return;
+            }
+
+            let descendants = dataset.filter(row =>
+                row.node_id !== rootNodeId &&
+                String(row.node_id).startsWith(`${rootNodeId}.`)
+            );
+            let maxDepth = descendants.reduce(
+                (currentMax, row) => Math.max(currentMax, Number(row.depth) || 0),
+                0
+            );
+            let anchorId = `blocking_tree_observation_${index + 1}`;
+            rootRow.setAttribute('id', anchorId);
+
+            let item = document.createElement('div');
+            item.classList.add('level2', 'chapter', 'blocking-menu-entry');
+
+            let link = document.createElement('a');
+            link.classList.add('anchor');
+            link.href = `#${anchorId}`;
+            link.title = root.query_text
+                ? `Блокирующий SQL: ${root.query_text}`
+                : 'Текст блокирующего SQL недоступен';
+
+            let itemTitle = document.createElement('span');
+            itemTitle.classList.add('blocking-menu-entry-title');
+            let intervalPrefix = root.interval_num
+                ? `Интервал ${root.interval_num} · `
+                : '';
+            itemTitle.textContent = `${intervalPrefix}${Menu.formatBlockingObservationTime(root.observed_at)} · ${root.node_label}`;
+
+            let itemMeta = document.createElement('span');
+            itemMeta.classList.add('blocking-menu-entry-meta');
+            let application = root.application_name || root.username || 'Приложение не указано';
+            itemMeta.textContent = `${application} · ожидающих: ${uniqueSessionCount(descendants)} · глубина: ${maxDepth}`;
+
+            link.appendChild(itemTitle);
+            link.appendChild(itemMeta);
+            link.addEventListener('click', event => {
+                event.preventDefault();
+                let expandedRoot = LockTree.expandBranch(rootNodeId);
+                if (expandedRoot) {
+                    expandedRoot.scrollIntoView({ block: 'start' });
+                    history.replaceState(null, '', `#${anchorId}`);
+                }
+            });
+            item.appendChild(link);
+            nestedDiv.appendChild(item);
+        });
+
+        if (!nestedDiv.children.length) {
+            return;
+        }
+
+        if (roots.length > MAX_MENU_ITEMS) {
+            let note = document.createElement('div');
+            note.classList.add('blocking-menu-limit');
+            note.textContent = `Показаны последние ${MAX_MENU_ITEMS} из ${roots.length}`;
+            nestedDiv.appendChild(note);
+        }
+
+        const arrowHTML = `
+            <svg viewBox="0 0 16 16" width="16" height="16" class="arrow blocking-menu-arrow">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M4.9417 5.5L8 8.54753L11.0583 5.5L12.5 6.93662L8.72085 10.7025C8.32273 11.0992 7.67726 11.0992 7.27915 10.7025L3.5 6.93662L4.9417 5.5Z" fill="#A6B5C7"/>
+            </svg>
+        `;
+        title.insertAdjacentHTML('beforeend', arrowHTML);
+        let arrowSvg = title.querySelector('.blocking-menu-arrow');
+        arrowSvg.addEventListener('click', () => {
+            nestedDiv.classList.toggle('hidden');
+            arrowSvg.classList.toggle('up');
+        });
+        rootContainer.appendChild(nestedDiv);
+    }
+
     /** Create a logo */
     static drawLogo() {
         let reportContent = document.getElementById('pageContent');
@@ -117,6 +239,7 @@ class Menu {
         body.insertAdjacentHTML('afterbegin', pageContent);
         let sections = document.getElementById("sections");
         Menu.buildPageContent(data, sections, 1);
+        Menu.buildBlockingTreeMenu();
 
         /** Draw Logo */
         this.drawLogo();
