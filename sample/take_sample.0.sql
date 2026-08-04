@@ -250,20 +250,8 @@ BEGIN
     END CASE;
     server_properties := log_sample_timings(server_properties, 'collect statement stats', 'end');
 
-    server_properties := log_sample_timings(server_properties, 'collect wait sampling stats', 'start');
-    -- Search for wait sampling extension
-    CASE
-      -- pg_wait_sampling statistics collection
-      WHEN (
-        SELECT count(*) = 1
-        FROM jsonb_to_recordset(server_properties #> '{extensions}') AS ext(extname text)
-        WHERE extname = 'pg_wait_sampling'
-      ) AND COALESCE((server_properties #> '{collect,pg_wait_sampling}')::boolean, true)THEN
-        PERFORM collect_pg_wait_sampling_stats(server_properties, sserver_id, s_id, topn);
-      ELSE
-        NULL;
-    END CASE;
-    server_properties := log_sample_timings(server_properties, 'collect wait sampling stats', 'end');
+    -- Collection from pg_wait_sampling is intentionally disabled. Report feature
+    -- flags remain data-driven so historical and imported samples are supported.
 
     server_properties := query_pg_stat_bgwriter(server_properties, sserver_id, s_id);
     server_properties := query_pg_stat_wal(server_properties, sserver_id, s_id);
@@ -307,6 +295,10 @@ BEGIN
         sserver_id);
       EXECUTE format('DELETE FROM last_stat_activity_count_srv%1$s',
         sserver_id);
+    END IF;
+
+    IF (SELECT count(*) > 0 FROM last_lock_tree WHERE server_id = sserver_id) THEN
+      EXECUTE format('DELETE FROM last_lock_tree_srv%1$s', sserver_id);
     END IF;
 
     server_properties := log_sample_timings(server_properties, 'processing subsamples', 'end');

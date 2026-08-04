@@ -3,6 +3,7 @@ report_files = \
 	functions/stat_io.sql \
 	functions/stat_slru.sql \
 	functions/stat_lock.sql \
+	functions/blocking_tree.sql \
 	functions/dbstat.sql \
 	functions/dead_mods_ix_unused.sql \
 	functions/functionstat.sql \

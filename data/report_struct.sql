@@ -48,6 +48,30 @@ VALUES
 (1, 'srvstat', NULL, 200, 'Статистика сервера', 'Статистика сервера', NULL, NULL, NULL, NULL),
 (1, 'actsesshdr', NULL, 250, 'Состояния сеансов', 'Состояния сеансов по данным подснимков', 'act_backend', NULL,
   '{"class": "notice", "text": "Статистика состояний сеансов, превысивших пороги сбора."}', NULL),
+(1, 'blocking_tree', NULL, 260, 'Блокировки', 'Деревья блокировок', 'blocking_tree', NULL,
+  '{"class": "notice", "text": "Корневая строка — блокирующий сеанс. Вложенные строки — ожидающие запросы. В колонках «Ожидает PID», «Блокирует PID» и «Текущий запрос сеанса» видно направление блокировки и участвующие SQL-запросы. Нажмите стрелку, чтобы раскрыть цепочку."}',
+  '[{'
+    '"type": "row_table",'
+    '"source": "blocking_tree",'
+    '"ordering": "ord_tree",'
+    '"class": "lock-tree",'
+    '"columns": ['
+      '{"id": "node_label", "class": "table_obj_name lockTreeNode", "caption": "Сеанс"},'
+      '{"id": "role_label", "class": "table_obj_name", "caption": "Роль в цепочке"},'
+      '{"id": "blocked_by", "class": "table_obj_value", "caption": "Ожидает PID"},'
+      '{"id": "blocks_pids", "class": "table_obj_value", "caption": "Блокирует PID"},'
+      '{"id": "observed_at", "class": "table_obj_value", "caption": "Время наблюдения"},'
+      '{"id": "dbname", "class": "table_obj_name", "caption": "База данных"},'
+      '{"id": "username", "class": "table_obj_name", "caption": "Пользователь"},'
+      '{"id": "application_name", "class": "table_obj_name", "caption": "Приложение"},'
+      '{"id": "client_addr", "class": "table_obj_value", "caption": "Клиент"},'
+      '{"id": "xact_age", "class": "table_obj_value", "caption": "Возраст транзакции"},'
+      '{"id": "session_state", "class": "table_obj_name", "caption": "Состояние"},'
+      '{"id": "wait_event", "class": "table_obj_name", "caption": "Ожидание"},'
+      '{"id": "lock_info", "class": "table_obj_name", "caption": "Ожидаемая блокировка"},'
+      '{"id": "query_text", "class": "table_obj_name fullScreen", "caption": "Текущий запрос сеанса"}'
+    ']'
+  '}]'::jsonb),
 (1, 'sqlsthdr', NULL, 300, 'Статистика SQL-запросов', 'Статистика SQL-запросов', 'statstatements', NULL, NULL, NULL),
 (1, 'objects', NULL, 400, 'Статистика объектов схемы', 'Статистика объектов схемы', NULL, NULL, NULL, NULL),
 (1, 'funchdr', NULL, 500, 'Статистика пользовательских функций', 'Статистика пользовательских функций', 'function_stats', NULL, NULL, NULL),
@@ -2378,6 +2402,31 @@ VALUES
 (2, 'srvstat', NULL, 300, 'Статистика сервера', 'Статистика сервера', NULL, NULL, NULL, NULL),
 (2, 'actsesshdr', NULL, 350, 'Состояния сеансов', 'Состояния сеансов по данным подснимков', 'act_backend', NULL,
   '{"class": "notice", "text": "Статистика состояний сеансов, превысивших пороги сбора."}', NULL),
+(2, 'blocking_tree', NULL, 360, 'Блокировки', 'Деревья блокировок', 'blocking_tree', NULL,
+  '{"class": "notice", "text": "Корневая строка — блокирующий сеанс. Вложенные строки — ожидающие запросы. В колонках «Ожидает PID», «Блокирует PID» и «Текущий запрос сеанса» видно направление блокировки и участвующие SQL-запросы. Нажмите стрелку, чтобы раскрыть цепочку."}',
+  '[{'
+    '"type": "row_table",'
+    '"source": "blocking_tree",'
+    '"ordering": "ord_tree",'
+    '"class": "lock-tree",'
+    '"columns": ['
+      '{"id": "node_label", "class": "table_obj_name lockTreeNode", "caption": "Сеанс"},'
+      '{"id": "interval_num", "class": "table_obj_value", "caption": "Интервал"},'
+      '{"id": "role_label", "class": "table_obj_name", "caption": "Роль в цепочке"},'
+      '{"id": "blocked_by", "class": "table_obj_value", "caption": "Ожидает PID"},'
+      '{"id": "blocks_pids", "class": "table_obj_value", "caption": "Блокирует PID"},'
+      '{"id": "observed_at", "class": "table_obj_value", "caption": "Время наблюдения"},'
+      '{"id": "dbname", "class": "table_obj_name", "caption": "База данных"},'
+      '{"id": "username", "class": "table_obj_name", "caption": "Пользователь"},'
+      '{"id": "application_name", "class": "table_obj_name", "caption": "Приложение"},'
+      '{"id": "client_addr", "class": "table_obj_value", "caption": "Клиент"},'
+      '{"id": "xact_age", "class": "table_obj_value", "caption": "Возраст транзакции"},'
+      '{"id": "session_state", "class": "table_obj_name", "caption": "Состояние"},'
+      '{"id": "wait_event", "class": "table_obj_name", "caption": "Ожидание"},'
+      '{"id": "lock_info", "class": "table_obj_name", "caption": "Ожидаемая блокировка"},'
+      '{"id": "query_text", "class": "table_obj_name fullScreen", "caption": "Текущий запрос сеанса"}'
+    ']'
+  '}]'::jsonb),
 (2, 'sqlsthdr', NULL, 400, 'Статистика SQL-запросов', 'Статистика SQL-запросов', 'statstatements', NULL, NULL, NULL),
 (2, 'objects', NULL, 500, 'Статистика объектов схемы', 'Статистика объектов схемы', NULL, NULL, NULL, NULL),
 (2, 'funchdr', NULL, 600, 'Статистика пользовательских функций', 'Статистика пользовательских функций', 'function_stats', NULL, NULL, NULL),

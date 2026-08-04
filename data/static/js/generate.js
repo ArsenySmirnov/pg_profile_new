@@ -129,6 +129,7 @@ class BaseTable extends BaseSection {
         'planId': BaseTable.buildPlanIdCell,
         'queryText': BaseTable.buildQueryTextCell,
         'waitEvent': BaseTable.buildWaitEventDetailsCell,
+        'lockTreeNode': BaseTable.buildLockTreeNodeCell,
         'pipeChart': PipeChart.drawIntoTable,
     }
     static properties = {
@@ -389,6 +390,42 @@ class BaseTable extends BaseSection {
         cell.appendChild(newText);
 
         return true;
+    }
+
+    static buildLockTreeNodeCell(newRow, column, row) {
+        let cell = newRow.insertCell(-1);
+        let wrapper = document.createElement('div');
+        let depth = Number(row.depth) || 0;
+
+        cell.setAttribute('class', column.class);
+        newRow.classList.add('lock-tree-row');
+        if (depth > 0) {
+            newRow.classList.add('lock-tree-hidden');
+        }
+
+        wrapper.classList.add('lock-tree-node');
+        wrapper.style.paddingLeft = `${depth * 1.25}rem`;
+
+        if (row.has_children) {
+            let button = document.createElement('button');
+            button.type = 'button';
+            button.classList.add('lock-tree-toggle');
+            button.setAttribute('aria-expanded', 'false');
+            button.setAttribute('title', 'Развернуть ветвь');
+            button.textContent = '▸';
+            wrapper.appendChild(button);
+        } else {
+            let spacer = document.createElement('span');
+            spacer.classList.add('lock-tree-toggle-spacer');
+            wrapper.appendChild(spacer);
+        }
+
+        let label = document.createElement('span');
+        label.textContent = row[column.id] || '';
+        wrapper.appendChild(label);
+        cell.appendChild(wrapper);
+
+        return Boolean(row[column.id]);
     }
 
     static buildWaitEventDetailsCell(newRow, column, row) {
@@ -850,5 +887,61 @@ class VerticalTable extends BaseTable {
                 VerticalTable.buildCell(newRow, cell, rows, klass);
             }
         }
+    }
+}
+
+class LockTree {
+    static init() {
+        document.querySelectorAll('table.lock-tree').forEach(table => {
+            let rows = Array.from(table.querySelectorAll('tr.lock-tree-row'));
+            let children = new Map();
+
+            rows.forEach(row => {
+                let parentId = row.getAttribute('data-parent_node_id');
+                if (parentId && parentId !== 'null') {
+                    if (!children.has(parentId)) {
+                        children.set(parentId, []);
+                    }
+                    children.get(parentId).push(row);
+                }
+            });
+
+            const collapseBranch = row => {
+                let nodeId = row.getAttribute('data-node_id');
+                (children.get(nodeId) || []).forEach(child => {
+                    child.classList.add('lock-tree-hidden');
+                    let childButton = child.querySelector('.lock-tree-toggle');
+                    if (childButton) {
+                        childButton.setAttribute('aria-expanded', 'false');
+                        childButton.setAttribute('title', 'Развернуть ветвь');
+                        childButton.textContent = '▸';
+                    }
+                    collapseBranch(child);
+                });
+            };
+
+            rows.forEach(row => {
+                let button = row.querySelector('.lock-tree-toggle');
+                if (!button) {
+                    return;
+                }
+                button.addEventListener('click', () => {
+                    let expanded = button.getAttribute('aria-expanded') === 'true';
+                    let nodeId = row.getAttribute('data-node_id');
+
+                    if (expanded) {
+                        collapseBranch(row);
+                    } else {
+                        (children.get(nodeId) || []).forEach(child => {
+                            child.classList.remove('lock-tree-hidden');
+                        });
+                    }
+
+                    button.setAttribute('aria-expanded', String(!expanded));
+                    button.setAttribute('title', expanded ? 'Развернуть ветвь' : 'Свернуть ветвь');
+                    button.textContent = expanded ? '▸' : '▾';
+                });
+            });
+        });
     }
 }

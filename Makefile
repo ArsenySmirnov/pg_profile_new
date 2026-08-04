@@ -69,6 +69,7 @@ sample = \
 	sample/calculate_wal_stats.sql \
 	sample/calculate_lock_stats.sql \
 	sample/collect_database_stats.sql \
+	sample/collect_lock_tree.sql \
 	sample/collect_obj_stats.sql \
 	sample/collect_subsamples.sql \
 	sample/collect_tablespace_stats.sql \

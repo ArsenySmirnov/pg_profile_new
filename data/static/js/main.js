@@ -26,14 +26,14 @@ function buildReport(data, parentNode, deep) {
 function addDescription(data, parentNode) {
     if (data.properties.description) {
         let description = `
-            <h3>Description:</h3>
+            <h3>Описание:</h3>
             <p>${data.properties.description}</p>
         `;
         parentNode.insertAdjacentHTML('beforeend', description);
     }
     if (data.properties.server_description) {
         let server_description = `
-            <h3>Server description:</h3>
+            <h3>Описание сервера:</h3>
             <p>${data.properties.server_description}</p>
         `;
         parentNode.insertAdjacentHTML('beforeend', server_description);
@@ -51,6 +51,9 @@ function main() {
 
     /** Add query text and plan feature */
     Previewer.init();
+
+    /** Add expandable blocking trees */
+    LockTree.init();
 
     /** Add menu feature */
     Menu.init();

@@ -74,6 +74,14 @@ BEGIN
         'cluster_stats_reset', profile_checkavail_cluster_stats_reset(sserver_id, start1_id, end1_id),
         'statstatements',profile_checkavail_statstatements(sserver_id, start1_id, end1_id),
         'wait_sampling_tot',profile_checkavail_wait_sampling_total(sserver_id, start1_id, end1_id),
+        'blocking_tree', (
+          SELECT EXISTS (
+            SELECT 1
+            FROM sample_lock_tree
+            WHERE server_id = sserver_id
+              AND sample_id BETWEEN start1_id + 1 AND end1_id
+          )
+        ),
         'stat_io', (
           SELECT COUNT(*) > 0 FROM (
             SELECT backend_type
@@ -380,6 +388,15 @@ BEGIN
           profile_checkavail_statstatements(sserver_id, start2_id, end2_id),
         'wait_sampling_tot',profile_checkavail_wait_sampling_total(sserver_id, start1_id, end1_id) OR
           profile_checkavail_wait_sampling_total(sserver_id, start2_id, end2_id),
+        'blocking_tree', (
+          SELECT EXISTS (
+            SELECT 1
+            FROM sample_lock_tree
+            WHERE server_id = sserver_id
+              AND (sample_id BETWEEN start1_id + 1 AND end1_id
+                OR sample_id BETWEEN start2_id + 1 AND end2_id)
+          )
+        ),
         'stat_io', (
           SELECT COUNT(*) > 0 FROM (
             SELECT backend_type
@@ -981,6 +998,12 @@ BEGIN
         ) <= (report_context #>> '{report_properties,topn}')::numeric;
     END IF;
 
+    IF (report_context #>> '{report_features,blocking_tree}')::boolean THEN
+      SELECT coalesce(jsonb_set(datasets, '{blocking_tree}', jsonb_agg(to_jsonb(dt))), datasets)
+      INTO datasets
+      FROM blocking_tree_format(sserver_id, start1_id, end1_id) dt;
+    END IF;
+
     SELECT coalesce(jsonb_set(datasets, '{top_tables}', jsonb_agg(to_jsonb(dt))), datasets)
     INTO datasets
     FROM top_tables_format(sserver_id, start1_id, end1_id) dt
@@ -1308,6 +1331,13 @@ BEGIN
           ord_dur,
           ord_age
         ) <= (report_context #>> '{report_properties,topn}')::numeric;
+    END IF;
+
+    IF (report_context #>> '{report_features,blocking_tree}')::boolean THEN
+      SELECT coalesce(jsonb_set(datasets, '{blocking_tree}', jsonb_agg(to_jsonb(dt))), datasets)
+      INTO datasets
+      FROM blocking_tree_format_diff(sserver_id, start1_id, end1_id,
+        start2_id, end2_id) dt;
     END IF;
 
     SELECT coalesce(jsonb_set(datasets, '{top_tables}', jsonb_agg(to_jsonb(dt))), datasets)

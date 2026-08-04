@@ -144,9 +144,7 @@ BEGIN
           'extversion '
           'FROM pg_catalog.pg_extension '
           'WHERE extname IN ('
-            '''pg_stat_statements'','
-            '''pg_wait_sampling'','
-            '''pg_stat_kcache'''
+            '''pg_stat_statements'''
           ')')
         AS dbl(extname name, extnamespace name, extversion text)
     LOOP

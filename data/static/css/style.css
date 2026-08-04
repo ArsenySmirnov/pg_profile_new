@@ -349,6 +349,53 @@ table tr.active td {
     background-color: #CCF1FF;
 }
 
+.lock-tree-node {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: max-content;
+}
+
+.lock-tree-toggle,
+.lock-tree-toggle-spacer {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex: 0 0 1.25rem;
+}
+
+.lock-tree-toggle {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #24618a;
+    cursor: pointer;
+    font: inherit;
+    line-height: 1;
+}
+
+.lock-tree-toggle:hover,
+.lock-tree-toggle:focus-visible {
+    color: #000;
+    outline: 1px solid #24618a;
+}
+
+table.lock-tree tr.lock-tree-hidden {
+    display: none;
+}
+
+table.lock-tree td.fullScreen {
+    min-width: 24rem;
+    white-space: pre-wrap;
+}
+
+table.lock-tree tr.lock-tree-blocker td {
+    background-color: #fff0cc;
+}
+
+table.lock-tree tr.lock-tree-waiter td {
+    background-color: #f7f9fc;
+}
+
 table tr.active td {
     background-color: #CCF1FF;
 }

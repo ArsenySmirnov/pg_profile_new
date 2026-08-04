@@ -178,6 +178,20 @@ BEGIN
         'REFERENCES samples(server_id, sample_id) ON DELETE RESTRICT',
         sserver_id);
 
+    -- Create last_lock_tree table partition
+    EXECUTE format(
+      'CREATE TABLE last_lock_tree_srv%1$s PARTITION OF last_lock_tree '
+      'FOR VALUES IN (%1$s)',
+      sserver_id);
+    EXECUTE format(
+      'ALTER TABLE last_lock_tree_srv%1$s '
+      'ADD CONSTRAINT pk_last_lock_tree_srv%1$s '
+        'PRIMARY KEY (server_id, sample_id, subsample_ts, root_pid, path), '
+      'ADD CONSTRAINT fk_last_lock_tree_sample_srv%1$s '
+        'FOREIGN KEY (server_id, sample_id) '
+        'REFERENCES samples(server_id, sample_id) ON DELETE RESTRICT',
+        sserver_id);
+
 --<extension_start>
     /*
     * Check if partition is already in our extension. This happens when function
@@ -210,6 +224,8 @@ BEGIN
       EXECUTE format('ALTER EXTENSION {pg_profile} ADD TABLE last_stat_activity_srv%1$s',
         sserver_id);
       EXECUTE format('ALTER EXTENSION {pg_profile} ADD TABLE last_stat_activity_count_srv%1$s',
+        sserver_id);
+      EXECUTE format('ALTER EXTENSION {pg_profile} ADD TABLE last_lock_tree_srv%1$s',
         sserver_id);
     END IF;
 --<extension_end>
@@ -246,6 +262,8 @@ BEGIN
       dserver_id);
     EXECUTE format('ALTER EXTENSION {pg_profile} DROP TABLE last_stat_activity_count_srv%1$s',
       dserver_id);
+    EXECUTE format('ALTER EXTENSION {pg_profile} DROP TABLE last_lock_tree_srv%1$s',
+      dserver_id);
 --<extension_end>
     EXECUTE format(
       'DROP TABLE last_stat_kcache_srv%1$s',
@@ -276,6 +294,9 @@ BEGIN
       dserver_id);
     EXECUTE format(
       'DROP TABLE last_stat_activity_count_srv%1$s',
+      dserver_id);
+    EXECUTE format(
+      'DROP TABLE last_lock_tree_srv%1$s',
       dserver_id);
     DELETE FROM last_stat_cluster WHERE server_id = dserver_id;
     DELETE FROM last_stat_io WHERE server_id = dserver_id;

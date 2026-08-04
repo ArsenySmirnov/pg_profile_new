@@ -219,6 +219,69 @@ CREATE TABLE last_stat_activity_count(
 )
 PARTITION BY LIST (server_id);
 
+/* Lock trees captured by subsamples.  The last_* table accumulates
+ * observations until the next regular sample moves them to sample_lock_tree.
+ */
+CREATE TABLE sample_lock_tree(
+    server_id          integer,
+    sample_id          integer,
+    subsample_ts       timestamp with time zone,
+    root_pid           integer,
+    pid                integer,
+    blocked_by         integer,
+    depth              integer,
+    path               integer[],
+    datid              oid,
+    datname            name,
+    usename            name,
+    application_name   text,
+    client_addr        inet,
+    backend_start      timestamp with time zone,
+    xact_start         timestamp with time zone,
+    query_start        timestamp with time zone,
+    state              text,
+    wait_event_type    text,
+    wait_event         text,
+    query_id           bigint,
+    query_text         text,
+    lock_info          text,
+
+    CONSTRAINT pk_sample_lock_tree PRIMARY KEY (
+      server_id, sample_id, subsample_ts, root_pid, path
+    ),
+    CONSTRAINT fk_sample_lock_tree_samples FOREIGN KEY (server_id, sample_id)
+      REFERENCES samples (server_id, sample_id) ON DELETE CASCADE
+      DEFERRABLE INITIALLY IMMEDIATE
+);
+CREATE INDEX ix_sample_lock_tree_interval ON
+  sample_lock_tree(server_id, sample_id, subsample_ts);
+
+CREATE TABLE last_lock_tree(
+    server_id          integer,
+    sample_id          integer,
+    subsample_ts       timestamp with time zone,
+    root_pid           integer,
+    pid                integer,
+    blocked_by         integer,
+    depth              integer,
+    path               integer[],
+    datid              oid,
+    datname            name,
+    usename            name,
+    application_name   text,
+    client_addr        inet,
+    backend_start      timestamp with time zone,
+    xact_start         timestamp with time zone,
+    query_start        timestamp with time zone,
+    state              text,
+    wait_event_type    text,
+    wait_event         text,
+    query_id           bigint,
+    query_text         text,
+    lock_info          text
+)
+PARTITION BY LIST (server_id);
+
 GRANT SELECT ON sample_act_backend TO pg_read_all_stats;
 GRANT SELECT ON sample_act_xact TO pg_read_all_stats;
 GRANT SELECT ON sample_act_backend_state TO pg_read_all_stats;
@@ -227,3 +290,5 @@ GRANT SELECT ON sample_act_statement TO pg_read_all_stats;
 GRANT SELECT ON sample_stat_activity_cnt TO pg_read_all_stats;
 GRANT SELECT ON last_stat_activity_count TO pg_read_all_stats;
 GRANT SELECT ON session_attr TO pg_read_all_stats;
+GRANT SELECT ON sample_lock_tree TO pg_read_all_stats;
+GRANT SELECT ON last_lock_tree TO pg_read_all_stats;

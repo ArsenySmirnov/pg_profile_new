@@ -479,6 +479,10 @@ BEGIN
           io                integer
       );
 
+  -- Capture the current blocking forest. Relationships come from
+  -- pg_blocking_pids(), while pg_locks only describes the requested lock.
+  PERFORM collect_lock_tree(properties, sserver_id, s_id);
+
   IF NOT (properties #>> '{properties,in_sample}')::boolean THEN
     -- Reset lock_timeout setting to its initial value
     PERFORM dblink('server_connection', 'COMMIT');

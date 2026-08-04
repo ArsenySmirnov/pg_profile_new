@@ -25,6 +25,57 @@ DECLARE
     ;
 BEGIN
 
+    INSERT INTO sample_lock_tree (
+      server_id,
+      sample_id,
+      subsample_ts,
+      root_pid,
+      pid,
+      blocked_by,
+      depth,
+      path,
+      datid,
+      datname,
+      usename,
+      application_name,
+      client_addr,
+      backend_start,
+      xact_start,
+      query_start,
+      state,
+      wait_event_type,
+      wait_event,
+      query_id,
+      query_text,
+      lock_info
+    )
+    SELECT
+      server_id,
+      s_id,
+      subsample_ts,
+      root_pid,
+      pid,
+      blocked_by,
+      depth,
+      path,
+      datid,
+      datname,
+      usename,
+      application_name,
+      client_addr,
+      backend_start,
+      xact_start,
+      query_start,
+      state,
+      wait_event_type,
+      wait_event,
+      query_id,
+      query_text,
+      lock_info
+    FROM last_lock_tree
+    WHERE server_id = sserver_id
+      AND sample_id IN (s_id - 1, s_id);
+
     INSERT INTO sample_act_backend (
       server_id,
       sample_id,
