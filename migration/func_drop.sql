@@ -12,3 +12,6 @@ DROP FUNCTION cluster_stat_slru_reset_format(integer,integer,integer,integer,int
 DROP FUNCTION wal_stats_reset;
 DROP FUNCTION wal_stats_reset_format;
 DROP FUNCTION wal_stats_reset_format_diff;
+DROP FUNCTION collect_obj_stats(jsonb,integer,integer,boolean);
+DROP FUNCTION collect_pg_wait_sampling_stats(jsonb,integer,integer,integer);
+DROP FUNCTION collect_pg_wait_sampling_stats_11(jsonb,integer,integer,integer);

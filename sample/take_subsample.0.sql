@@ -4,10 +4,9 @@ DECLARE
   server_query  text;
 
   session_rows  integer;
-  qres          record;
-
   s_id          integer;  -- last base sample identifier
   srv_version   integer;
+  is_local      boolean;
 
   guc_min_query_dur       interval hour to second;
   guc_min_xact_dur        interval hour to second;
@@ -15,19 +14,18 @@ DECLARE
   guc_min_idle_xact_dur   interval hour to second;
 
 BEGIN
-  -- Adding dblink extension schema to search_path if it does not already there
-  IF (SELECT count(*) = 0 FROM pg_catalog.pg_extension WHERE extname = 'dblink') THEN
-    RAISE 'dblink extension must be installed';
-  END IF;
+  SELECT server_name = 'local'
+    INTO STRICT is_local
+  FROM servers
+  WHERE server_id = sserver_id;
 
-  SELECT extnamespace::regnamespace AS dblink_schema INTO STRICT qres FROM pg_catalog.pg_extension WHERE extname = 'dblink';
-  IF NOT string_to_array(current_setting('search_path'),',') @> ARRAY[qres.dblink_schema::text] THEN
-    EXECUTE 'SET LOCAL search_path TO ' || current_setting('search_path')||','|| qres.dblink_schema;
+  IF NOT is_local THEN
+    RAISE 'Remote subsampling is disabled. Only the local server is supported';
   END IF;
 
   IF (properties IS NULL) THEN
     -- Initialization is not done yet
-    properties := init_sample(sserver_id);
+    properties := init_sample(sserver_id, false);
   END IF; -- empty properties
 
   -- Skip subsampling if it is disabled
@@ -264,58 +262,37 @@ BEGIN
       properties #>> '{properties,topn}'
   );
 
-  -- Save the current state of captured sessions satisfying thresholds
-  INSERT INTO last_stat_activity
-  SELECT
-      sserver_id,
-      s_id,
-      dbl.subsample_ts,
-      dbl.datid,
-      dbl.datname,
-      dbl.pid,
-      dbl.leader_pid,
-      dbl.usesysid,
-      dbl.usename,
-      dbl.application_name,
-      dbl.client_addr,
-      dbl.client_hostname,
-      dbl.client_port,
-      dbl.backend_start,
-      dbl.xact_start,
-      dbl.query_start,
-      dbl.state_change,
-      dbl.state,
-      dbl.backend_xid,
-      dbl.backend_xmin,
-      dbl.query_id,
-      dbl.query,
-      dbl.backend_type,
-      dbl.backend_xmin_age
-  FROM
-      dblink('server_connection', server_query) AS dbl(
-          subsample_ts      timestamp with time zone,
-          datid             oid,
-          datname           name,
-          pid               integer,
-          leader_pid        integer,
-          usesysid          oid,
-          usename           name,
-          application_name  text,
-          client_addr       inet,
-          client_hostname   text,
-          client_port       integer,
-          backend_start     timestamp with time zone,
-          xact_start        timestamp with time zone,
-          query_start       timestamp with time zone,
-          state_change      timestamp with time zone,
-          state             text,
-          backend_xid       text,
-          backend_xmin      text,
-          query_id          bigint,
-          query             text,
-          backend_type      text,
-          backend_xmin_age      bigint
-      );
+  -- Save the current state of captured sessions satisfying thresholds.
+  EXECUTE format($local$
+      INSERT INTO last_stat_activity
+      SELECT
+        $1,
+        $2,
+        local_activity.subsample_ts,
+        local_activity.datid,
+        local_activity.datname,
+        local_activity.pid,
+        local_activity.leader_pid::integer,
+        local_activity.usesysid,
+        local_activity.usename,
+        local_activity.application_name,
+        local_activity.client_addr,
+        local_activity.client_hostname,
+        local_activity.client_port,
+        local_activity.backend_start,
+        local_activity.xact_start,
+        local_activity.query_start,
+        local_activity.state_change,
+        local_activity.state,
+        local_activity.backend_xid::text,
+        local_activity.backend_xmin::text,
+        local_activity.query_id::bigint,
+        local_activity.query,
+        local_activity.backend_type,
+        local_activity.backend_xmin_age::bigint
+      FROM (%1$s) AS local_activity
+    $local$, server_query)
+  USING sserver_id, s_id;
   GET DIAGNOSTICS session_rows = ROW_COUNT;
 
   IF session_rows > 0 THEN
@@ -422,62 +399,38 @@ BEGIN
     'FROM pg_stat_activity '
     'GROUP BY backend_type, datid, datname, usesysid, usename, application_name, client_addr';
 
-  -- Save the current state of captured sessions satisfying thresholds
-  INSERT INTO last_stat_activity_count
-  SELECT
-      sserver_id,
-      s_id,
-      dbl.subsample_ts,
-      dbl.backend_type,
-      dbl.datid,
-      dbl.datname,
-      dbl.usesysid,
-      dbl.usename,
-      dbl.application_name,
-      dbl.client_addr,
-
-      dbl.total,
-      dbl.active,
-      dbl.idle,
-      dbl.idle_t,
-      dbl.idle_ta,
-      dbl.state_null,
-      dbl.lwlock,
-      dbl.lock,
-      dbl.buffer,
-      dbl.activity,
-      dbl.extension,
-      dbl.client,
-      dbl.ipc,
-      dbl.timeout,
-      dbl.io
-  FROM
-      dblink('server_connection', server_query) AS dbl(
-          subsample_ts      timestamp with time zone,
-          backend_type      text,
-          datid             oid,
-          datname           name,
-          usesysid          oid,
-          usename           name,
-          application_name  text,
-          client_addr       inet,
-
-          total             integer,
-          active            integer,
-          idle              integer,
-          idle_t            integer,
-          idle_ta           integer,
-          state_null        integer,
-          lwlock            integer,
-          lock              integer,
-          buffer            integer,
-          activity          integer,
-          extension         integer,
-          client            integer,
-          ipc               integer,
-          timeout           integer,
-          io                integer
-      );
+  -- Save session counts by state and wait event.
+  EXECUTE format($local$
+      INSERT INTO last_stat_activity_count
+      SELECT
+        $1,
+        $2,
+        local_count.subsample_ts,
+        local_count.backend_type,
+        local_count.datid,
+        local_count.datname,
+        local_count.usesysid,
+        local_count.usename,
+        local_count.application_name,
+        local_count.client_addr,
+        local_count.total::integer,
+        local_count.active::integer,
+        local_count.idle::integer,
+        local_count.idle_t::integer,
+        local_count.idle_ta::integer,
+        local_count.state_null::integer,
+        local_count.lwlock::integer,
+        local_count.lock::integer,
+        local_count.buffer::integer,
+        local_count.activity::integer,
+        local_count.extension::integer,
+        local_count.client::integer,
+        local_count.ipc::integer,
+        local_count.timeout::integer,
+        local_count.io::integer
+      FROM (%1$s) AS local_count
+    $local$, server_query)
+  USING sserver_id, s_id;
 
   -- Capture the current blocking forest. Relationships come from
   -- pg_blocking_pids(), while pg_locks only describes the requested lock.
@@ -485,8 +438,6 @@ BEGIN
 
   IF NOT (properties #>> '{properties,in_sample}')::boolean THEN
     -- Reset lock_timeout setting to its initial value
-    PERFORM dblink('server_connection', 'COMMIT');
-    PERFORM dblink_disconnect('server_connection');
     EXECUTE format('SET lock_timeout TO %L', properties #>> '{properties,lock_timeout_init}');
   END IF;
 

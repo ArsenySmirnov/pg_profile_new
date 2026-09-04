@@ -11,23 +11,12 @@ DECLARE
     edetail             text := '';
     econtext            text := '';
 
-    qres                record;
-    conname             text;
     start_clock         timestamp (2) with time zone;
 BEGIN
     SELECT server_id INTO sserver_id FROM servers WHERE server_name = take_sample.server;
     IF sserver_id IS NULL THEN
         RAISE 'Server not found';
     ELSE
-        /*
-        * We should include dblink schema to perform disconnections
-        * on exception conditions
-        */
-        SELECT extnamespace::regnamespace AS dblink_schema INTO STRICT qres FROM pg_catalog.pg_extension WHERE extname = 'dblink';
-        IF NOT string_to_array(current_setting('search_path'),', ') @> ARRAY[qres.dblink_schema::text] THEN
-          EXECUTE 'SET LOCAL search_path TO ' || current_setting('search_path')||','|| qres.dblink_schema;
-        END IF;
-
         BEGIN
             start_clock := clock_timestamp()::timestamp (2) with time zone;
             server_sampleres := take_sample(sserver_id, take_sample.skip_sizes);
@@ -48,16 +37,6 @@ BEGIN
                     result := format (E'%s\n%s\n%s', etext, econtext, edetail);
                     elapsed := clock_timestamp()::timestamp (2) with time zone - start_clock;
                     RETURN NEXT;
-                    /*
-                      Cleanup dblink connections
-                    */
-                    FOREACH conname IN ARRAY
-                        coalesce(dblink_get_connections(), array[]::text[])
-                    LOOP
-                        IF conname IN ('server_connection', 'server_db_connection') THEN
-                            PERFORM dblink_disconnect(conname);
-                        END IF;
-                    END LOOP;
                 END;
         END;
     END IF;

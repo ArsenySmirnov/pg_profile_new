@@ -1,0 +1,10 @@
+.vscode/
+
+# Generated build artifacts
+pg_profile.control
+pg_profile--*.sql
+pg_profile--*.tar.gz
+schema/schema.sql
+data/report_templates.sql
+report/report_build.sql
+data/static/js/script.js

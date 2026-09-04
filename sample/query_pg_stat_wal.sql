@@ -51,44 +51,37 @@ begin
     END CASE;
 
     IF server_query IS NOT NULL THEN
-      INSERT INTO last_stat_wal (
-        server_id,
-        sample_id,
-        wal_records,
-        wal_fpi,
-        wal_bytes,
-        wal_fpi_bytes,
-        wal_buffers_full,
-        wal_write,
-        wal_sync,
-        wal_write_time,
-        wal_sync_time,
-        stats_reset
-      )
-      SELECT
-        sserver_id,
-        ssample_id,
-        wal_records,
-        wal_fpi,
-        wal_bytes,
-        wal_fpi_bytes,
-        wal_buffers_full,
-        wal_write,
-        wal_sync,
-        wal_write_time,
-        wal_sync_time,
-        stats_reset
-      FROM dblink('server_connection',server_query) AS rs (
-        wal_records         bigint,
-        wal_fpi             bigint,
-        wal_bytes           numeric,
-        wal_fpi_bytes       numeric,
-        wal_buffers_full    bigint,
-        wal_write           bigint,
-        wal_sync            bigint,
-        wal_write_time      double precision,
-        wal_sync_time       double precision,
-        stats_reset         timestamp with time zone);
+      EXECUTE format($query$
+          INSERT INTO last_stat_wal (
+            server_id,
+            sample_id,
+            wal_records,
+            wal_fpi,
+            wal_bytes,
+            wal_fpi_bytes,
+            wal_buffers_full,
+            wal_write,
+            wal_sync,
+            wal_write_time,
+            wal_sync_time,
+            stats_reset
+          )
+          SELECT
+            $1,
+            $2,
+            wal_records::bigint,
+            wal_fpi::bigint,
+            wal_bytes::numeric,
+            wal_fpi_bytes::numeric,
+            wal_buffers_full::bigint,
+            wal_write::bigint,
+            wal_sync::bigint,
+            wal_write_time::double precision,
+            wal_sync_time::double precision,
+            stats_reset::timestamp with time zone
+          FROM (%s) AS rs
+        $query$, server_query)
+      USING sserver_id, ssample_id;
     END IF;
     server_properties := log_sample_timings(server_properties, 'query pg_stat_wal', 'end');
     return server_properties;

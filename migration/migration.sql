@@ -15,3 +15,8 @@ ALTER TABLE sample_stat_activity_cnt
   ADD CONSTRAINT subsample_sa_cnt_servers FOREIGN KEY (server_id, sample_id)
     REFERENCES samples (server_id, sample_id) ON DELETE CASCADE
     DEFERRABLE INITIALLY IMMEDIATE;
+
+-- Local snapshots no longer use in-database cross-database connections.
+-- Object-level statistics will be supplied by the external host collector.
+SELECT set_server_setting('local', 'collect_objects', 'false')
+WHERE EXISTS (SELECT 1 FROM servers WHERE server_name = 'local');

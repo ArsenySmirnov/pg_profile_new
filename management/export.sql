@@ -45,7 +45,8 @@ BEGIN
             LEFT OUTER JOIN fkdeps con ON (con.reloid = dep.objid)
           WHERE ext.extname = $1 AND rel.relname NOT IN
               ('import_queries', 'import_queries_version_order',
-              'report', 'report_static', 'report_struct', 'last_stat_activity')
+              'report', 'report_static', 'report_struct', 'last_stat_activity',
+              'dabox_import_log')
             AND NOT rel.relispartition
             AND con.reloid IS NULL
       UNION
@@ -66,7 +67,8 @@ BEGIN
         JOIN pg_constraint con ON (con.conrelid = dep.objid AND con.contype = 'f')
       WHERE ext.extname = $1 AND rel.relname NOT IN
         ('import_queries', 'import_queries_version_order',
-        'report', 'report_static', 'report_struct', 'last_stat_activity')
+        'report', 'report_static', 'report_struct', 'last_stat_activity',
+        'dabox_import_log')
         AND NOT rel.relispartition
       GROUP BY rel.oid, rel.relname
     )
@@ -4443,6 +4445,74 @@ BEGIN
           END IF;
         END LOOP; -- over data rows
       END IF;
+    WHEN 'sample_lock_tree' THEN
+      LOOP
+        FETCH data INTO datarow;
+        EXIT WHEN NOT FOUND;
+        INSERT INTO sample_lock_tree(
+          server_id, sample_id, subsample_ts, root_pid, pid, blocked_by,
+          depth, path, datid, datname, usename, application_name,
+          client_addr, backend_start, xact_start, query_start, state,
+          wait_event_type, wait_event, query_id, query_text, lock_info
+        )
+        SELECT
+          (srv_map ->> dr.server_id::text)::integer,
+          dr.sample_id,
+          dr.subsample_ts,
+          dr.root_pid,
+          dr.pid,
+          dr.blocked_by,
+          dr.depth,
+          dr.path,
+          dr.datid,
+          dr.datname,
+          dr.usename,
+          dr.application_name,
+          dr.client_addr,
+          dr.backend_start,
+          dr.xact_start,
+          dr.query_start,
+          dr.state,
+          dr.wait_event_type,
+          dr.wait_event,
+          dr.query_id,
+          dr.query_text,
+          dr.lock_info
+        FROM json_to_record(datarow.row_data) AS dr(
+          server_id          integer,
+          sample_id          integer,
+          subsample_ts       timestamp with time zone,
+          root_pid           integer,
+          pid                integer,
+          blocked_by         integer,
+          depth              integer,
+          path               integer[],
+          datid              oid,
+          datname            name,
+          usename            name,
+          application_name   text,
+          client_addr        inet,
+          backend_start      timestamp with time zone,
+          xact_start         timestamp with time zone,
+          query_start        timestamp with time zone,
+          state              text,
+          wait_event_type    text,
+          wait_event         text,
+          query_id           bigint,
+          query_text         text,
+          lock_info          text
+        )
+        JOIN samples s_ctl ON
+          ((srv_map ->> dr.server_id::text)::integer, dr.sample_id) =
+          (s_ctl.server_id, s_ctl.sample_id)
+        ON CONFLICT ON CONSTRAINT pk_sample_lock_tree DO NOTHING;
+        GET DIAGNOSTICS row_proc = ROW_COUNT;
+        rowcnt := rowcnt + row_proc;
+        IF (rowcnt > 0 AND rowcnt % 1000 = 0) THEN
+          RAISE NOTICE '%', format('Table %s processed: %s rows', imp_table_name, rowcnt);
+        END IF;
+      END LOOP;
+    WHEN 'last_lock_tree' THEN NULL; -- local differential working data is not imported
     WHEN 'last_stat_activity' THEN
       LOOP
         FETCH data INTO datarow;

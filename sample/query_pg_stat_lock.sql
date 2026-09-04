@@ -26,30 +26,21 @@ begin
     END CASE;
 
     IF server_query IS NOT NULL THEN
-      INSERT INTO last_stat_lock (
-        server_id,
-        sample_id,
-        locktype,
-        waits,
-        wait_time,
-        fastpath_exceeded,
-        stats_reset
-      )
-      SELECT
-        sserver_id,
-        ssample_id,
-        locktype,
-        waits,
-        wait_time,
-        fastpath_exceeded,
-        stats_reset
-      FROM dblink('server_connection',server_query) AS rs (
-        locktype            text,
-        waits               bigint,
-        wait_time           bigint,
-        fastpath_exceeded   bigint,
-        stats_reset         timestamp with time zone
-      );
+      EXECUTE format($query$
+          INSERT INTO last_stat_lock (
+            server_id,
+            sample_id,
+            locktype,
+            waits,
+            wait_time,
+            fastpath_exceeded,
+            stats_reset
+          )
+          SELECT $1, $2, locktype, waits, wait_time,
+            fastpath_exceeded, stats_reset
+          FROM (%s) AS rs
+        $query$, server_query)
+      USING sserver_id, ssample_id;
     END IF;
     server_properties := log_sample_timings(server_properties, 'query pg_stat_lock', 'end');
     return server_properties;

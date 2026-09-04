@@ -17,7 +17,6 @@ DECLARE
     econtext            text := '';
 
     qres          RECORD;
-    conname       text;
     start_clock   timestamp (2) with time zone;
 BEGIN
     IF sets_cnt IS NULL OR sets_cnt < 1 THEN
@@ -26,15 +25,6 @@ BEGIN
     IF current_set IS NULL OR current_set < 0 OR current_set > sets_cnt - 1 THEN
       RAISE 'current_cnt value is invalid. Must be between 0 and sets_cnt - 1';
     END IF;
-    /*
-    * We should include dblink schema to perform disconnections
-    * on exception conditions
-    */
-    SELECT extnamespace::regnamespace AS dblink_schema INTO STRICT qres FROM pg_catalog.pg_extension WHERE extname = 'dblink';
-    IF NOT string_to_array(current_setting('search_path'),', ') @> ARRAY[qres.dblink_schema::text] THEN
-      EXECUTE 'SET LOCAL search_path TO ' || current_setting('search_path')||','|| qres.dblink_schema;
-    END IF;
-
     FOR qres IN c_servers LOOP
         BEGIN
             start_clock := clock_timestamp()::timestamp (2) with time zone;
@@ -57,16 +47,6 @@ BEGIN
                     result := format (E'%s\n%s\n%s', etext, econtext, edetail);
                     elapsed := clock_timestamp()::timestamp (2) with time zone - start_clock;
                     RETURN NEXT;
-                    /*
-                      Cleanup dblink connections
-                    */
-                    FOREACH conname IN ARRAY
-                        coalesce(dblink_get_connections(), array[]::text[])
-                    LOOP
-                        IF conname IN ('server_connection', 'server_db_connection') THEN
-                            PERFORM dblink_disconnect(conname);
-                        END IF;
-                    END LOOP;
                 END;
         END;
     END LOOP;

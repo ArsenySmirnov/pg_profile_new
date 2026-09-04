@@ -6,30 +6,30 @@ DECLARE
     server_properties jsonb;
     qres              record;
     qres_settings     record;
+    current_setting_row record;
+    last_setting_row  record;
     settings_refresh  boolean = true;
+    last_setting_found boolean;
+    is_local          boolean;
+    sample_timestamp  timestamp with time zone;
 
     server_query      text;
 BEGIN
-    -- Adding dblink extension schema to search_path if it does not already there
-    IF (SELECT count(*) = 0 FROM pg_catalog.pg_extension WHERE extname = 'dblink') THEN
-      RAISE 'dblink extension must be installed';
-    END IF;
-
-    SELECT extnamespace::regnamespace AS dblink_schema INTO STRICT qres FROM pg_catalog.pg_extension WHERE extname = 'dblink';
-    IF NOT string_to_array(current_setting('search_path'),', ') @> ARRAY[qres.dblink_schema::text] THEN
-      EXECUTE 'SET LOCAL search_path TO ' || current_setting('search_path')||','|| qres.dblink_schema;
-    END IF;
-
     -- Only one running take_sample() function allowed per server!
     -- Explicitly lock server in servers table
     BEGIN
-        SELECT * INTO qres FROM servers WHERE server_id = sserver_id FOR UPDATE NOWAIT;
+        SELECT * INTO STRICT qres FROM servers WHERE server_id = sserver_id FOR UPDATE NOWAIT;
     EXCEPTION
         WHEN OTHERS THEN RAISE 'Can''t get lock on server. Is there another take_sample() function running on this server?';
     END;
 
+    is_local := qres.server_name = 'local';
+    IF NOT is_local THEN
+      RAISE 'Remote sampling is disabled. Only the local server is supported';
+    END IF;
+
     -- Initialize sample
-    server_properties := init_sample(sserver_id);
+    server_properties := init_sample(sserver_id, false);
     ASSERT server_properties IS NOT NULL, 'lost properties';
 
     -- Merge srv_settings into server_properties structure
@@ -56,7 +56,8 @@ BEGIN
     UPDATE servers SET last_sample_id = last_sample_id + 1 WHERE server_id = sserver_id
       RETURNING last_sample_id INTO s_id;
     INSERT INTO samples(sample_time,server_id,sample_id)
-      VALUES (now(),sserver_id,s_id);
+      VALUES (now(),sserver_id,s_id)
+      RETURNING sample_time INTO sample_timestamp;
 
     -- Once the new sample is created it becomes last one
     server_properties := jsonb_set(
@@ -113,9 +114,10 @@ BEGIN
     * This is needed for deleting obsolete parameters, not appearing in new
     * Postgres version.
     */
-    SELECT ss.setting != dblver.version INTO settings_refresh
-    FROM v_sample_settings ss, dblink('server_connection','SELECT version() as version') AS dblver (version text)
-    WHERE ss.server_id = sserver_id AND ss.sample_id = s_id AND ss.name='version' AND ss.setting_scope = 2;
+    SELECT ss.setting != pg_catalog.version() INTO settings_refresh
+    FROM v_sample_settings ss
+    WHERE ss.server_id = sserver_id AND ss.sample_id = s_id
+      AND ss.name = 'version' AND ss.setting_scope = 2;
     settings_refresh := COALESCE(settings_refresh,true);
 
     -- Constructing server sql query for settings
@@ -131,69 +133,76 @@ BEGIN
       'system_identifier::text,system_identifier::text,system_identifier::text,'
       'NULL,NULL,NULL,False FROM pg_catalog.pg_control_system()';
 
-    INSERT INTO sample_settings(
-      server_id,
-      first_seen,
-      setting_scope,
-      name,
-      setting,
-      reset_val,
-      boot_val,
-      unit,
-      sourcefile,
-      sourceline,
-      pending_restart
-    )
-    SELECT
-      s.server_id as server_id,
-      s.sample_time as first_seen,
-      cur.setting_scope,
-      cur.name,
-      cur.setting,
-      cur.reset_val,
-      cur.boot_val,
-      cur.unit,
-      cur.sourcefile,
-      cur.sourceline,
-      cur.pending_restart
-    FROM
-      sample_settings lst JOIN (
-        -- Getting last versions of settings
-        SELECT server_id, name, max(first_seen) as first_seen
-        FROM sample_settings
-        WHERE server_id = sserver_id AND (
-          NOT settings_refresh
-          -- system identifier shouldn't have a duplicate in case of version change
-          -- this breaks export/import procedures, as those are related to this ID
-          OR name = 'system_identifier'
-        )
-        GROUP BY server_id, name
-      ) lst_times
-      USING (server_id, name, first_seen)
-      -- Getting current settings values
-      RIGHT OUTER JOIN dblink('server_connection',server_query
-          ) AS cur (
-            setting_scope smallint,
-            name text,
-            setting text,
-            reset_val text,
-            boot_val text,
-            unit text,
-            sourcefile text,
-            sourceline integer,
-            pending_restart boolean
+    FOR current_setting_row IN EXECUTE server_query
+      LOOP
+        SELECT
+          NULL::text AS reset_val,
+          NULL::boolean AS pending_restart,
+          NULL::text AS sourcefile,
+          NULL::integer AS sourceline,
+          NULL::text AS unit
+        INTO last_setting_row;
+        last_setting_found := false;
+        IF NOT settings_refresh OR current_setting_row.name = 'system_identifier' THEN
+          SELECT
+            reset_val,
+            pending_restart,
+            sourcefile,
+            sourceline,
+            unit
+          INTO last_setting_row
+          FROM sample_settings
+          WHERE server_id = sserver_id
+            AND setting_scope = current_setting_row.setting_scope
+            AND name = current_setting_row.name
+          ORDER BY first_seen DESC
+          LIMIT 1;
+          last_setting_found := FOUND;
+        END IF;
+
+        IF current_setting_row.reset_val IS NOT NULL AND (
+          NOT last_setting_found OR
+          ROW(
+            current_setting_row.reset_val,
+            current_setting_row.pending_restart,
+            current_setting_row.sourcefile,
+            current_setting_row.sourceline,
+            current_setting_row.unit
+          ) IS DISTINCT FROM ROW(
+            last_setting_row.reset_val,
+            last_setting_row.pending_restart,
+            last_setting_row.sourcefile,
+            last_setting_row.sourceline,
+            last_setting_row.unit
           )
-        USING (setting_scope, name)
-      JOIN samples s ON (s.server_id = sserver_id AND s.sample_id = s_id)
-    WHERE
-      cur.reset_val IS NOT NULL AND (
-        lst.name IS NULL
-        OR cur.reset_val != lst.reset_val
-        OR cur.pending_restart != lst.pending_restart
-        OR lst.sourcefile != cur.sourcefile
-        OR lst.sourceline != cur.sourceline
-        OR lst.unit != cur.unit
-      );
+        ) THEN
+          INSERT INTO sample_settings(
+            server_id,
+            first_seen,
+            setting_scope,
+            name,
+            setting,
+            reset_val,
+            boot_val,
+            unit,
+            sourcefile,
+            sourceline,
+            pending_restart
+          ) VALUES (
+            sserver_id,
+            sample_timestamp,
+            current_setting_row.setting_scope,
+            current_setting_row.name,
+            current_setting_row.setting,
+            current_setting_row.reset_val,
+            current_setting_row.boot_val,
+            current_setting_row.unit,
+            current_setting_row.sourcefile,
+            current_setting_row.sourceline,
+            current_setting_row.pending_restart
+          );
+        END IF;
+    END LOOP;
 
     INSERT INTO sample_settings(
       server_id,
@@ -260,14 +269,6 @@ BEGIN
     server_properties := query_pg_stat_archiver(server_properties, sserver_id, s_id);
     server_properties := query_pg_stat_lock(server_properties, sserver_id, s_id);
 
-    server_properties := log_sample_timings(server_properties, 'collect object stats', 'start');
-    -- Collecting stat info for objects of all databases
-    IF COALESCE((server_properties #> '{collect,objects}')::boolean, true) THEN
-      server_properties := collect_obj_stats(server_properties, sserver_id, s_id, skip_sizes);
-      ASSERT server_properties IS NOT NULL, 'lost properties';
-    END IF;
-    server_properties := log_sample_timings(server_properties, 'collect object stats', 'end');
-
     server_properties := log_sample_timings(server_properties, 'processing subsamples', 'start');
     -- Process subsamples if enabled
     IF (server_properties #>> '{properties,subsample_enabled}')::boolean THEN
@@ -303,11 +304,6 @@ BEGIN
 
     server_properties := log_sample_timings(server_properties, 'processing subsamples', 'end');
 
-    server_properties := log_sample_timings(server_properties, 'disconnect', 'start');
-    PERFORM dblink('server_connection', 'COMMIT');
-    PERFORM dblink_disconnect('server_connection');
-    server_properties := log_sample_timings(server_properties, 'disconnect', 'end');
-
     server_properties := log_sample_timings(server_properties, 'maintain repository', 'start');
     -- Updating dictionary table in case of object renaming:
     -- Databases
@@ -341,18 +337,9 @@ BEGIN
     perform calculate_tablespace_stats(sserver_id, s_id);
     server_properties := log_sample_timings(server_properties, 'calculate tablespace stats', 'end');
 
-    server_properties := log_sample_timings(server_properties, 'calculate object stats', 'start');
-    -- collect databases objects stats
-    IF COALESCE((server_properties #> '{collect,objects}')::boolean, true) THEN
-      server_properties := sample_dbobj_delta(server_properties,sserver_id,s_id,topn,skip_sizes);
-      ASSERT server_properties IS NOT NULL, 'lost properties';
-    END IF;
-
     DELETE FROM last_stat_tablespaces WHERE server_id = sserver_id AND sample_id != s_id;
 
     DELETE FROM last_stat_database WHERE server_id = sserver_id AND sample_id != s_id;
-
-    server_properties := log_sample_timings(server_properties, 'calculate object stats', 'end');
 
     server_properties := log_sample_timings(server_properties, 'calculate cluster stats', 'start');
     perform calculate_cluster_stats(sserver_id, s_id);

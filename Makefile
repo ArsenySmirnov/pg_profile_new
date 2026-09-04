@@ -55,7 +55,8 @@ adm_funcs = management/baseline.sql \
 	management/server.sql \
 	management/local_server.sql
 export_funcs = \
-	management/export.sql
+	management/export.sql \
+	management/dabox.sql
 sample = \
 	sample/log_sample_timings.sql \
 	sample/sample_pg_stat_statements.sql \
@@ -70,13 +71,11 @@ sample = \
 	sample/calculate_lock_stats.sql \
 	sample/collect_database_stats.sql \
 	sample/collect_lock_tree.sql \
-	sample/collect_obj_stats.sql \
 	sample/collect_subsamples.sql \
 	sample/collect_tablespace_stats.sql \
 	sample/delete_obsolete_samples.sql \
 	sample/get_sized_bounds.sql \
 	sample/init_sample.sql \
-	sample/pg_wait_sampling.sql \
 	sample/query_pg_stat_archiver.sql \
 	sample/query_pg_stat_bgwriter.sql \
 	sample/query_pg_stat_io.sql \

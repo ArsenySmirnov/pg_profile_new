@@ -2,11 +2,17 @@ CREATE FUNCTION collect_pg_stat_statements_stats(IN properties jsonb, IN sserver
 DECLARE
   qres              record;
   st_query          text;
+  is_local          boolean;
+  statements_rows   bigint;
+  statement_texts   jsonb;
 BEGIN
-    -- Adding dblink extension schema to search_path if it does not already there
-    SELECT extnamespace::regnamespace AS dblink_schema INTO STRICT qres FROM pg_catalog.pg_extension WHERE extname = 'dblink';
-    IF NOT string_to_array(current_setting('search_path'),', ') @> ARRAY[qres.dblink_schema::text] THEN
-      EXECUTE 'SET LOCAL search_path TO ' || current_setting('search_path')||','|| qres.dblink_schema;
+    SELECT server_name = 'local'
+      INTO STRICT is_local
+    FROM servers
+    WHERE server_id = sserver_id;
+
+    IF NOT is_local THEN
+      RAISE 'Remote statement collection is disabled. Only the local server is supported';
     END IF;
 
     -- Check if mandatory extensions exists
@@ -56,7 +62,7 @@ BEGIN
       'SELECT '
         'st.userid,'
         'st.userid::regrole AS username,'
-        'st.dbid,'
+        'st.dbid AS datid,'
         'st.queryid,'
         '{statements_fields} '
       'FROM '
@@ -463,425 +469,93 @@ BEGIN
     END CASE; -- pg_stat_statememts versions
 
     -- Get statements data
-    INSERT INTO last_stat_statements (
-        server_id,
-        sample_id,
-        userid,
-        username,
-        datid,
-        queryid,
-        plans,
-        total_plan_time,
-        min_plan_time,
-        max_plan_time,
-        mean_plan_time,
-        stddev_plan_time,
-        calls,
-        total_exec_time,
-        min_exec_time,
-        max_exec_time,
-        mean_exec_time,
-        stddev_exec_time,
-        rows,
-        shared_blks_hit,
-        shared_blks_read,
-        shared_blks_dirtied,
-        shared_blks_written,
-        local_blks_hit,
-        local_blks_read,
-        local_blks_dirtied,
-        local_blks_written,
-        temp_blks_read,
-        temp_blks_written,
-        shared_blk_read_time,
-        shared_blk_write_time,
-        wal_records,
-        wal_fpi,
-        wal_bytes,
-        wal_buffers_full,
-        toplevel,
-        in_sample,
-        jit_functions,
-        jit_generation_time,
-        jit_inlining_count,
-        jit_inlining_time,
-        jit_optimization_count,
-        jit_optimization_time,
-        jit_emission_count,
-        jit_emission_time,
-        temp_blk_read_time,
-        temp_blk_write_time,
-        local_blk_read_time,
-        local_blk_write_time,
-        jit_deform_count,
-        jit_deform_time,
-        parallel_workers_to_launch,
-        parallel_workers_launched,
-        generic_plan_calls,
-        custom_plan_calls,
-        stats_since,
-        minmax_stats_since
-      )
-    SELECT
-      sserver_id,
-      s_id,
-      dbl.userid,
-      dbl.username,
-      dbl.datid,
-      dbl.queryid,
-      dbl.plans,
-      dbl.total_plan_time,
-      dbl.min_plan_time,
-      dbl.max_plan_time,
-      dbl.mean_plan_time,
-      dbl.stddev_plan_time,
-      dbl.calls,
-      dbl.total_exec_time,
-      dbl.min_exec_time,
-      dbl.max_exec_time,
-      dbl.mean_exec_time,
-      dbl.stddev_exec_time,
-      dbl.rows,
-      dbl.shared_blks_hit,
-      dbl.shared_blks_read,
-      dbl.shared_blks_dirtied,
-      dbl.shared_blks_written,
-      dbl.local_blks_hit,
-      dbl.local_blks_read,
-      dbl.local_blks_dirtied,
-      dbl.local_blks_written,
-      dbl.temp_blks_read,
-      dbl.temp_blks_written,
-      dbl.shared_blk_read_time,
-      dbl.shared_blk_write_time,
-      dbl.wal_records,
-      dbl.wal_fpi,
-      dbl.wal_bytes,
-      dbl.wal_buffers_full,
-      dbl.toplevel,
-      false,
-      dbl.jit_functions,
-      dbl.jit_generation_time,
-      dbl.jit_inlining_count,
-      dbl.jit_inlining_time,
-      dbl.jit_optimization_count,
-      dbl.jit_optimization_time,
-      dbl.jit_emission_count,
-      dbl.jit_emission_time,
-      dbl.temp_blk_read_time,
-      dbl.temp_blk_write_time,
-      dbl.local_blk_read_time,
-      dbl.local_blk_write_time,
-      dbl.jit_deform_count,
-      dbl.jit_deform_time,
-      dbl.parallel_workers_to_launch,
-      dbl.parallel_workers_launched,
-      dbl.generic_plan_calls,
-      dbl.custom_plan_calls,
-      dbl.stats_since,
-      dbl.minmax_stats_since
-    FROM dblink('server_connection',st_query)
-    AS dbl (
-      -- pg_stat_statements fields
-        userid              oid,
-        username            name,
-        datid               oid,
-        queryid             bigint,
-        toplevel            boolean,
-        plans               bigint,
-        total_plan_time     double precision,
-        min_plan_time       double precision,
-        max_plan_time       double precision,
-        mean_plan_time      double precision,
-        stddev_plan_time    double precision,
-        calls               bigint,
-        total_exec_time     double precision,
-        min_exec_time       double precision,
-        max_exec_time       double precision,
-        mean_exec_time      double precision,
-        stddev_exec_time    double precision,
-        rows                bigint,
-        shared_blks_hit     bigint,
-        shared_blks_read    bigint,
-        shared_blks_dirtied bigint,
-        shared_blks_written bigint,
-        local_blks_hit      bigint,
-        local_blks_read     bigint,
-        local_blks_dirtied  bigint,
-        local_blks_written  bigint,
-        temp_blks_read      bigint,
-        temp_blks_written   bigint,
-        shared_blk_read_time  double precision,
-        shared_blk_write_time double precision,
-        wal_records         bigint,
-        wal_fpi             bigint,
-        wal_bytes           numeric,
-        wal_buffers_full    bigint,
-        jit_functions       bigint,
-        jit_generation_time double precision,
-        jit_inlining_count  bigint,
-        jit_inlining_time   double precision,
-        jit_optimization_count  bigint,
-        jit_optimization_time   double precision,
-        jit_emission_count  bigint,
-        jit_emission_time   double precision,
-        temp_blk_read_time  double precision,
-        temp_blk_write_time double precision,
-        local_blk_read_time double precision,
-        local_blk_write_time  double precision,
-        jit_deform_count    bigint,
-        jit_deform_time     double precision,
-        parallel_workers_to_launch  bigint,
-        parallel_workers_launched   bigint,
-        generic_plan_calls  bigint,
-        custom_plan_calls   bigint,
-        stats_since         timestamp with time zone,
-        minmax_stats_since  timestamp with time zone
-      );
+    EXECUTE format($query$
+        INSERT INTO last_stat_statements (
+          server_id, sample_id, userid, username, datid, queryid,
+          plans, total_plan_time, min_plan_time, max_plan_time,
+          mean_plan_time, stddev_plan_time, calls, total_exec_time,
+          min_exec_time, max_exec_time, mean_exec_time, stddev_exec_time,
+          rows, shared_blks_hit, shared_blks_read, shared_blks_dirtied,
+          shared_blks_written, local_blks_hit, local_blks_read,
+          local_blks_dirtied, local_blks_written, temp_blks_read,
+          temp_blks_written, shared_blk_read_time, shared_blk_write_time,
+          wal_records, wal_fpi, wal_bytes, wal_buffers_full, toplevel,
+          in_sample, jit_functions, jit_generation_time, jit_inlining_count,
+          jit_inlining_time, jit_optimization_count, jit_optimization_time,
+          jit_emission_count, jit_emission_time, temp_blk_read_time,
+          temp_blk_write_time, local_blk_read_time, local_blk_write_time,
+          jit_deform_count, jit_deform_time, parallel_workers_to_launch,
+          parallel_workers_launched, generic_plan_calls, custom_plan_calls,
+          stats_since, minmax_stats_since
+        )
+        SELECT
+          $1, $2,
+          dbl.userid::oid,
+          dbl.username::name,
+          dbl.datid::oid,
+          dbl.queryid::bigint,
+          dbl.plans::bigint,
+          dbl.total_plan_time::double precision,
+          dbl.min_plan_time::double precision,
+          dbl.max_plan_time::double precision,
+          dbl.mean_plan_time::double precision,
+          dbl.stddev_plan_time::double precision,
+          dbl.calls::bigint,
+          dbl.total_exec_time::double precision,
+          dbl.min_exec_time::double precision,
+          dbl.max_exec_time::double precision,
+          dbl.mean_exec_time::double precision,
+          dbl.stddev_exec_time::double precision,
+          dbl.rows::bigint,
+          dbl.shared_blks_hit::bigint,
+          dbl.shared_blks_read::bigint,
+          dbl.shared_blks_dirtied::bigint,
+          dbl.shared_blks_written::bigint,
+          dbl.local_blks_hit::bigint,
+          dbl.local_blks_read::bigint,
+          dbl.local_blks_dirtied::bigint,
+          dbl.local_blks_written::bigint,
+          dbl.temp_blks_read::bigint,
+          dbl.temp_blks_written::bigint,
+          dbl.shared_blk_read_time::double precision,
+          dbl.shared_blk_write_time::double precision,
+          dbl.wal_records::bigint,
+          dbl.wal_fpi::bigint,
+          dbl.wal_bytes::numeric,
+          dbl.wal_buffers_full::bigint,
+          dbl.toplevel::boolean,
+          false,
+          dbl.jit_functions::bigint,
+          dbl.jit_generation_time::double precision,
+          dbl.jit_inlining_count::bigint,
+          dbl.jit_inlining_time::double precision,
+          dbl.jit_optimization_count::bigint,
+          dbl.jit_optimization_time::double precision,
+          dbl.jit_emission_count::bigint,
+          dbl.jit_emission_time::double precision,
+          dbl.temp_blk_read_time::double precision,
+          dbl.temp_blk_write_time::double precision,
+          dbl.local_blk_read_time::double precision,
+          dbl.local_blk_write_time::double precision,
+          dbl.jit_deform_count::bigint,
+          dbl.jit_deform_time::double precision,
+          dbl.parallel_workers_to_launch::bigint,
+          dbl.parallel_workers_launched::bigint,
+          dbl.generic_plan_calls::bigint,
+          dbl.custom_plan_calls::bigint,
+          dbl.stats_since::timestamp with time zone,
+          dbl.minmax_stats_since::timestamp with time zone
+        FROM (%s) AS dbl
+      $query$, st_query)
+    USING sserver_id, s_id;
+    GET DIAGNOSTICS statements_rows = ROW_COUNT;
     -- Whe should skip the following when no statements are available
-    IF NOT FOUND THEN
+    IF statements_rows = 0 THEN
       RETURN;
     END IF;
 
     EXECUTE format('ANALYZE last_stat_statements_srv%1$s',
       sserver_id);
-
-    -- Rusage data collection when available
-    IF
-      (
-        SELECT count(*) = 1
-        FROM jsonb_to_recordset(properties #> '{extensions}') AS ext(extname text)
-        WHERE extname = 'pg_stat_kcache'
-      )
-    THEN
-      -- Dynamic rusage query
-      st_query := format(
-        'SELECT '
-          'kc.userid,'
-          'kc.dbid,'
-          'kc.queryid,'
-          '{kcache_fields} '
-        'FROM '
-          '{kcache_view} kc '
-      );
-
-      st_query := replace(st_query, '{kcache_view}',
-        format('%1$I.pg_stat_kcache()',
-          (
-            SELECT extnamespace FROM jsonb_to_recordset(properties #> '{extensions}')
-              AS x(extname text, extnamespace text)
-            WHERE extname = 'pg_stat_kcache'
-          )
-        )
-      );
-
-      CASE -- pg_stat_kcache versions
-        (
-          SELECT extversion
-          FROM jsonb_to_recordset(properties #> '{extensions}')
-            AS x(extname text, extversion text)
-          WHERE extname = 'pg_stat_kcache'
-        )
-        -- pg_stat_kcache v.2.1.0 - 2.1.3
-        WHEN '2.1.0','2.1.1','2.1.2','2.1.3'
-        THEN
-          st_query := replace(st_query, '{kcache_fields}',
-            'true as toplevel,'
-            'NULL as plan_user_time,'
-            'NULL as plan_system_time,'
-            'NULL as plan_minflts,'
-            'NULL as plan_majflts,'
-            'NULL as plan_nswaps,'
-            'NULL as plan_reads,'
-            'NULL as plan_writes,'
-            'NULL as plan_msgsnds,'
-            'NULL as plan_msgrcvs,'
-            'NULL as plan_nsignals,'
-            'NULL as plan_nvcsws,'
-            'NULL as plan_nivcsws,'
-            'kc.user_time as exec_user_time,'
-            'kc.system_time as exec_system_time,'
-            'kc.minflts as exec_minflts,'
-            'kc.majflts as exec_majflts,'
-            'kc.nswaps as exec_nswaps,'
-            'kc.reads as exec_reads,'
-            'kc.writes as exec_writes,'
-            'kc.msgsnds as exec_msgsnds,'
-            'kc.msgrcvs as exec_msgrcvs,'
-            'kc.nsignals as exec_nsignals,'
-            'kc.nvcsws as exec_nvcsws,'
-            'kc.nivcsws as exec_nivcsws,'
-            'NULL as stats_since '
-          );
-        -- pg_stat_kcache v.2.2.0, 2.2.1, 2.2.2, 2.2.3
-        WHEN '2.2.0', '2.2.1', '2.2.2', '2.2.3'
-        THEN
-          st_query := replace(st_query, '{kcache_fields}',
-            'kc.top as toplevel,'
-            'kc.plan_user_time as plan_user_time,'
-            'kc.plan_system_time as plan_system_time,'
-            'kc.plan_minflts as plan_minflts,'
-            'kc.plan_majflts as plan_majflts,'
-            'kc.plan_nswaps as plan_nswaps,'
-            'kc.plan_reads as plan_reads,'
-            'kc.plan_writes as plan_writes,'
-            'kc.plan_msgsnds as plan_msgsnds,'
-            'kc.plan_msgrcvs as plan_msgrcvs,'
-            'kc.plan_nsignals as plan_nsignals,'
-            'kc.plan_nvcsws as plan_nvcsws,'
-            'kc.plan_nivcsws as plan_nivcsws,'
-            'kc.exec_user_time as exec_user_time,'
-            'kc.exec_system_time as exec_system_time,'
-            'kc.exec_minflts as exec_minflts,'
-            'kc.exec_majflts as exec_majflts,'
-            'kc.exec_nswaps as exec_nswaps,'
-            'kc.exec_reads as exec_reads,'
-            'kc.exec_writes as exec_writes,'
-            'kc.exec_msgsnds as exec_msgsnds,'
-            'kc.exec_msgrcvs as exec_msgrcvs,'
-            'kc.exec_nsignals as exec_nsignals,'
-            'kc.exec_nvcsws as exec_nvcsws,'
-            'kc.exec_nivcsws as exec_nivcsws,'
-            'NULL as stats_since '
-          );
-        WHEN '2.3.0', '2.3.1', '2.3.2'
-        THEN
-          st_query := replace(st_query, '{kcache_fields}',
-            'kc.top as toplevel,'
-            'kc.plan_user_time as plan_user_time,'
-            'kc.plan_system_time as plan_system_time,'
-            'kc.plan_minflts as plan_minflts,'
-            'kc.plan_majflts as plan_majflts,'
-            'kc.plan_nswaps as plan_nswaps,'
-            'kc.plan_reads as plan_reads,'
-            'kc.plan_writes as plan_writes,'
-            'kc.plan_msgsnds as plan_msgsnds,'
-            'kc.plan_msgrcvs as plan_msgrcvs,'
-            'kc.plan_nsignals as plan_nsignals,'
-            'kc.plan_nvcsws as plan_nvcsws,'
-            'kc.plan_nivcsws as plan_nivcsws,'
-            'kc.exec_user_time as exec_user_time,'
-            'kc.exec_system_time as exec_system_time,'
-            'kc.exec_minflts as exec_minflts,'
-            'kc.exec_majflts as exec_majflts,'
-            'kc.exec_nswaps as exec_nswaps,'
-            'kc.exec_reads as exec_reads,'
-            'kc.exec_writes as exec_writes,'
-            'kc.exec_msgsnds as exec_msgsnds,'
-            'kc.exec_msgrcvs as exec_msgrcvs,'
-            'kc.exec_nsignals as exec_nsignals,'
-            'kc.exec_nvcsws as exec_nvcsws,'
-            'kc.exec_nivcsws as exec_nivcsws,'
-            'kc.stats_since as stats_since '
-          );
-        ELSE
-          st_query := NULL;
-      END CASE; -- pg_stat_kcache versions
-
-      IF st_query IS NOT NULL THEN
-        INSERT INTO last_stat_kcache(
-          server_id,
-          sample_id,
-          userid,
-          datid,
-          toplevel,
-          queryid,
-          plan_user_time,
-          plan_system_time,
-          plan_minflts,
-          plan_majflts,
-          plan_nswaps,
-          plan_reads,
-          plan_writes,
-          plan_msgsnds,
-          plan_msgrcvs,
-          plan_nsignals,
-          plan_nvcsws,
-          plan_nivcsws,
-          exec_user_time,
-          exec_system_time,
-          exec_minflts,
-          exec_majflts,
-          exec_nswaps,
-          exec_reads,
-          exec_writes,
-          exec_msgsnds,
-          exec_msgrcvs,
-          exec_nsignals,
-          exec_nvcsws,
-          exec_nivcsws,
-          stats_since
-        )
-        SELECT
-          sserver_id,
-          s_id,
-          dbl.userid,
-          dbl.datid,
-          dbl.toplevel,
-          dbl.queryid,
-          dbl.plan_user_time  AS plan_user_time,
-          dbl.plan_system_time  AS plan_system_time,
-          dbl.plan_minflts  AS plan_minflts,
-          dbl.plan_majflts  AS plan_majflts,
-          dbl.plan_nswaps  AS plan_nswaps,
-          dbl.plan_reads  AS plan_reads,
-          dbl.plan_writes  AS plan_writes,
-          dbl.plan_msgsnds  AS plan_msgsnds,
-          dbl.plan_msgrcvs  AS plan_msgrcvs,
-          dbl.plan_nsignals  AS plan_nsignals,
-          dbl.plan_nvcsws  AS plan_nvcsws,
-          dbl.plan_nivcsws  AS plan_nivcsws,
-          dbl.exec_user_time  AS exec_user_time,
-          dbl.exec_system_time  AS exec_system_time,
-          dbl.exec_minflts  AS exec_minflts,
-          dbl.exec_majflts  AS exec_majflts,
-          dbl.exec_nswaps  AS exec_nswaps,
-          dbl.exec_reads  AS exec_reads,
-          dbl.exec_writes  AS exec_writes,
-          dbl.exec_msgsnds  AS exec_msgsnds,
-          dbl.exec_msgrcvs  AS exec_msgrcvs,
-          dbl.exec_nsignals  AS exec_nsignals,
-          dbl.exec_nvcsws  AS exec_nvcsws,
-          dbl.exec_nivcsws  AS exec_nivcsws,
-          dbl.stats_since AS stats_since
-        FROM dblink('server_connection',st_query)
-        AS dbl (
-          userid            oid,
-          datid             oid,
-          queryid           bigint,
-          toplevel          boolean,
-          plan_user_time    double precision,
-          plan_system_time  double precision,
-          plan_minflts      bigint,
-          plan_majflts      bigint,
-          plan_nswaps       bigint,
-          plan_reads        bigint,
-          plan_writes       bigint,
-          plan_msgsnds      bigint,
-          plan_msgrcvs      bigint,
-          plan_nsignals     bigint,
-          plan_nvcsws       bigint,
-          plan_nivcsws      bigint,
-          exec_user_time    double precision,
-          exec_system_time  double precision,
-          exec_minflts      bigint,
-          exec_majflts      bigint,
-          exec_nswaps       bigint,
-          exec_reads        bigint,
-          exec_writes       bigint,
-          exec_msgsnds      bigint,
-          exec_msgrcvs      bigint,
-          exec_nsignals     bigint,
-          exec_nvcsws       bigint,
-          exec_nivcsws      bigint,
-          stats_since       timestamp with time zone
-        ) JOIN last_stat_statements lss USING (userid, datid, queryid, toplevel)
-        WHERE
-          (lss.server_id, lss.sample_id) = (sserver_id, s_id);
-        EXECUTE format('ANALYZE last_stat_kcache_srv%1$s',
-          sserver_id);
-      END IF; -- st_query is not null
-    END IF; -- pg_stat_kcache extension is available
 
     PERFORM mark_pg_stat_statements(sserver_id, s_id, topn,
       (properties #> '{properties,statements_reset}') = to_jsonb(true));
@@ -896,14 +570,14 @@ BEGIN
       WHEN '1.3','1.4','1.5','1.6','1.7','1.8'
       THEN
         st_query :=
-          'SELECT userid, dbid, true AS toplevel, queryid, '||
+          'SELECT userid, dbid AS datid, true AS toplevel, queryid, '||
           $o$regexp_replace(query,$i$\s+$i$,$i$ $i$,$i$g$i$) AS query $o$ ||
           'FROM %1$I.pg_stat_statements(true) '
           'WHERE queryid IN (%s)';
       WHEN '1.9', '1.10', '1.11', '1.12', '1.13'
       THEN
         st_query :=
-          'SELECT userid, dbid, toplevel, queryid, '||
+          'SELECT userid, dbid AS datid, toplevel, queryid, '||
           $o$regexp_replace(query,$i$\s+$i$,$i$ $i$,$i$g$i$) AS query $o$ ||
           'FROM %1$I.pg_stat_statements(true) '
           'WHERE queryid IN (%s)';
@@ -927,6 +601,11 @@ BEGIN
         )
     );
 
+    EXECUTE format(
+      'SELECT COALESCE(jsonb_agg(to_jsonb(dbl)), ''[]''::jsonb) FROM (%s) AS dbl',
+      st_query
+    ) INTO statement_texts;
+
     -- Now we can save statement
     /*
     Hash function md5() is not working when the FIPS mode is
@@ -942,7 +621,7 @@ BEGIN
           toplevel,
           queryid,
           query
-        FROM dblink('server_connection',st_query) AS
+        FROM jsonb_to_recordset(statement_texts) AS
           dbl(
               userid    oid,
               datid     oid,
@@ -989,7 +668,7 @@ BEGIN
           toplevel,
           queryid,
           query
-        FROM dblink('server_connection',st_query) AS
+        FROM jsonb_to_recordset(statement_texts) AS
           dbl(
               userid    oid,
               datid     oid,
@@ -1031,35 +710,6 @@ BEGIN
       END LOOP; -- over sample statements
     END IF;
 
-    -- Flushing pg_stat_kcache
-    st_query := NULL;
-    CASE (
-        SELECT extversion FROM jsonb_to_recordset(properties #> '{extensions}')
-          AS x(extname text, extversion text)
-        WHERE extname = 'pg_stat_kcache'
-    )
-      WHEN '2.1.0','2.1.1','2.1.2','2.1.3','2.2.0','2.2.1','2.2.2','2.2.3','2.3.0'
-        , '2.3.1', '2.3.2'
-      THEN
-        IF (properties #> '{properties,statements_reset}')::boolean THEN
-          st_query := 'SELECT %1$I.pg_stat_kcache_reset() IS NULL';
-        END IF;
-      ELSE
-        NULL;
-    END CASE;
-
-    IF st_query IS NOT NULL THEN
-      st_query := format(st_query,
-          (
-            SELECT extnamespace FROM jsonb_to_recordset(properties #> '{extensions}')
-              AS x(extname text, extnamespace text)
-            WHERE extname = 'pg_stat_kcache'
-          )
-        );
-
-      PERFORM 0 FROM dblink('server_connection', st_query) AS dbl(t boolean);
-    END IF;
-
     -- Flushing statements
     st_query := NULL;
     CASE (
@@ -1095,7 +745,7 @@ BEGIN
           )
         );
 
-      PERFORM 0 FROM dblink('server_connection', st_query) AS dbl(t boolean);
+      EXECUTE st_query;
     END IF;
 
     -- Save the diffs in a sample

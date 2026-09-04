@@ -18,27 +18,13 @@ begin
     SELECT
       sserver_id,
       ssample_id,
-      dbl.tablespaceid,
-      dbl.tablespacename,
-      dbl.tablespacepath,
-      dbl.size AS size,
-      dbl.size_delta AS size_delta
-      FROM dblink('server_connection', $$
-            SELECT oid as tablespaceid,
-                   spcname as tablespacename,
-                   pg_catalog.pg_tablespace_location(oid) as tablespacepath,
-                   pg_catalog.pg_tablespace_size(oid) as size,
-                   0 as size_delta
-              FROM pg_catalog.pg_tablespace
-              WHERE pg_catalog.pg_tablespace_size(oid) IS NOT NULL
-            $$)
-    AS dbl (
-        tablespaceid            oid,
-        tablespacename          name,
-        tablespacepath          text,
-        size                    bigint,
-        size_delta              bigint
-    );
+      ts.oid,
+      ts.spcname,
+      pg_catalog.pg_tablespace_location(ts.oid),
+      pg_catalog.pg_tablespace_size(ts.oid),
+      0
+    FROM pg_catalog.pg_tablespace ts
+    WHERE pg_catalog.pg_tablespace_size(ts.oid) IS NOT NULL;
     EXECUTE format('ANALYZE last_stat_tablespaces_srv%1$s',
       sserver_id);
 end;

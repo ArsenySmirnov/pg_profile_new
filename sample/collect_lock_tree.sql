@@ -131,77 +131,60 @@ BEGIN
     ORDER BY observed.subsample_ts, tree.root_pid, tree.path
   $sql$, query_id_expr);
 
-  INSERT INTO last_lock_tree (
-    server_id,
-    sample_id,
-    subsample_ts,
-    root_pid,
-    pid,
-    blocked_by,
-    depth,
-    path,
-    datid,
-    datname,
-    usename,
-    application_name,
-    client_addr,
-    backend_start,
-    xact_start,
-    query_start,
-    state,
-    wait_event_type,
-    wait_event,
-    query_id,
-    query_text,
-    lock_info
-  )
-  SELECT
-    sserver_id,
-    s_id,
-    remote_tree.subsample_ts,
-    remote_tree.root_pid,
-    remote_tree.pid,
-    remote_tree.blocked_by,
-    remote_tree.depth,
-    remote_tree.path,
-    remote_tree.datid,
-    remote_tree.datname,
-    remote_tree.usename,
-    remote_tree.application_name,
-    remote_tree.client_addr,
-    remote_tree.backend_start,
-    remote_tree.xact_start,
-    remote_tree.query_start,
-    remote_tree.state,
-    remote_tree.wait_event_type,
-    remote_tree.wait_event,
-    remote_tree.query_id,
-    remote_tree.query_text,
-    remote_tree.lock_info
-  FROM dblink('server_connection', server_query) AS remote_tree (
-    subsample_ts       timestamp with time zone,
-    root_pid           integer,
-    pid                integer,
-    blocked_by         integer,
-    depth              integer,
-    path               integer[],
-    datid              oid,
-    datname            name,
-    usename            name,
-    application_name   text,
-    client_addr        inet,
-    backend_start      timestamp with time zone,
-    xact_start         timestamp with time zone,
-    query_start        timestamp with time zone,
-    state              text,
-    wait_event_type    text,
-    wait_event         text,
-    query_id           bigint,
-    query_text         text,
-    lock_info          text
-  );
+  -- Execute the blocking-tree query in the current backend.
+  EXECUTE format($local$
+      INSERT INTO last_lock_tree (
+        server_id,
+        sample_id,
+        subsample_ts,
+        root_pid,
+        pid,
+        blocked_by,
+        depth,
+        path,
+        datid,
+        datname,
+        usename,
+        application_name,
+        client_addr,
+        backend_start,
+        xact_start,
+        query_start,
+        state,
+        wait_event_type,
+        wait_event,
+        query_id,
+        query_text,
+        lock_info
+      )
+      SELECT
+        $1,
+        $2,
+        local_tree.subsample_ts,
+        local_tree.root_pid,
+        local_tree.pid,
+        local_tree.blocked_by,
+        local_tree.depth,
+        local_tree.path,
+        local_tree.datid,
+        local_tree.datname,
+        local_tree.usename,
+        local_tree.application_name,
+        local_tree.client_addr,
+        local_tree.backend_start,
+        local_tree.xact_start,
+        local_tree.query_start,
+        local_tree.state,
+        local_tree.wait_event_type,
+        local_tree.wait_event,
+        local_tree.query_id,
+        local_tree.query,
+        local_tree.lock_info
+      FROM (%1$s) AS local_tree
+    $local$, server_query)
+  USING sserver_id, s_id;
 END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION collect_lock_tree(IN jsonb, IN integer, IN integer) IS
-  'Capture current blocking trees using pg_blocking_pids() and pg_locks';
+  'Capture local blocking trees using pg_blocking_pids() and pg_locks';

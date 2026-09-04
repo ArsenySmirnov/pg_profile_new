@@ -1,14 +1,22 @@
-CREATE FUNCTION init_sample(IN sserver_id integer
+CREATE FUNCTION init_sample(IN sserver_id integer, IN connect_server boolean
 ) RETURNS jsonb SET search_path=@extschema@ AS $$
 DECLARE
     server_properties jsonb = '{"extensions":[],"settings":[],"timings":[],"properties":{}}'; -- version, extensions, etc.
     qres              record;
     qres_subsample    record;
-    server_connstr    text;
-
-    server_query      text;
-    server_host       text = NULL;
+    is_local          boolean;
+    is_pgpro          boolean;
+    observed_system_identifier bigint;
 BEGIN
+    SELECT server_name = 'local'
+      INTO STRICT is_local
+    FROM servers
+    WHERE server_id = sserver_id;
+
+    IF NOT is_local THEN
+      RAISE 'Remote sampling is disabled. Only the local server is supported';
+    END IF;
+
     server_properties := jsonb_set(server_properties, '{properties,in_sample}', to_jsonb(false));
     -- Conditionally set lock_timeout when it's not set
     server_properties := jsonb_set(server_properties,'{properties,lock_timeout_init}',
@@ -18,9 +26,6 @@ BEGIN
     END IF;
     server_properties := jsonb_set(server_properties,'{properties,lock_timeout_effective}',
       to_jsonb(current_setting('lock_timeout')));
-
-    -- Get server connstr
-    SELECT properties INTO server_properties FROM get_connstr(sserver_id, server_properties);
 
     -- Getting timing collection setting
     BEGIN
@@ -64,117 +69,48 @@ BEGIN
           );
     END;
 
-    -- Adding dblink extension schema to search_path if it does not already there
-    IF (SELECT count(*) = 0 FROM pg_catalog.pg_extension WHERE extname = 'dblink') THEN
-      RAISE 'dblink extension must be installed';
-    END IF;
-
-    SELECT extnamespace::regnamespace AS dblink_schema INTO STRICT qres FROM pg_catalog.pg_extension WHERE extname = 'dblink';
-    IF NOT string_to_array(current_setting('search_path'),', ') @> ARRAY[qres.dblink_schema::text] THEN
-      EXECUTE 'SET LOCAL search_path TO ' || current_setting('search_path')||','|| qres.dblink_schema;
-    END IF;
-
-    IF dblink_get_connections() @> ARRAY['server_connection'] THEN
-        PERFORM dblink_disconnect('server_connection');
-    END IF;
-
-    server_properties := log_sample_timings(server_properties, 'connect', 'start');
     server_properties := log_sample_timings(server_properties, 'total', 'start');
 
-    -- Server connection
-    PERFORM dblink_connect('server_connection', server_properties #>> '{properties,server_connstr}');
-    -- Transaction
-    PERFORM dblink('server_connection','BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
-    -- Setting application name
-    PERFORM dblink('server_connection','SET application_name=''{pg_profile}''');
-    -- Conditionally set lock_timeout
-    IF (
-      SELECT lock_timeout_unset
-      FROM dblink('server_connection',
-        $sql$SELECT current_setting('lock_timeout')::interval = '0s'::interval$sql$)
-        AS probe(lock_timeout_unset boolean)
-      )
-    THEN
-      -- Setting lock_timout prevents hanging due to DDL in long transaction
-      PERFORM dblink('server_connection',
-        format('SET lock_timeout TO %L',
-          COALESCE(server_properties #>> '{properties,lock_timeout_effective}','3s')
-        )
-      );
-    END IF;
-    -- Reset search_path for security reasons
-    PERFORM dblink('server_connection','SET search_path=''''');
-
-    server_properties := log_sample_timings(server_properties, 'connect', 'end');
     server_properties := log_sample_timings(server_properties, 'get server environment', 'start');
-    -- Get settings values for the server
+    -- Get settings values for the server.
     FOR qres IN
-      SELECT * FROM dblink('server_connection',
-          'SELECT name, '
-          'reset_val, '
-          'unit, '
-          'pending_restart '
-          'FROM pg_catalog.pg_settings '
-          'WHERE name IN ('
-            '''server_version_num'''
-          ')')
-        AS dbl(name text, reset_val text, unit text, pending_restart boolean)
+      SELECT name, reset_val, unit, pending_restart
+      FROM pg_catalog.pg_settings
+      WHERE name = 'server_version_num'
     LOOP
       server_properties := jsonb_insert(server_properties,'{"settings",0}',to_jsonb(qres));
     END LOOP;
 
     -- Is it PostgresPro?
-    IF (SELECT pgpro_fxs = 3
-        FROM dblink('server_connection',
-          'select count(1) as pgpro_fxs '
-          'from pg_catalog.pg_settings '
-          'where name IN (''pgpro_build'',''pgpro_edition'',''pgpro_version'')'
-        ) AS pgpro (pgpro_fxs integer))
-    THEN
-      server_properties := jsonb_set(server_properties,'{properties,pgpro}',to_jsonb(true));
-    ELSE
-      server_properties := jsonb_set(server_properties,'{properties,pgpro}',to_jsonb(false));
-    END IF;
+    SELECT count(*) = 3
+      INTO STRICT is_pgpro
+    FROM pg_catalog.pg_settings
+    WHERE name IN ('pgpro_build','pgpro_edition','pgpro_version');
+    server_properties := jsonb_set(server_properties,'{properties,pgpro}',to_jsonb(is_pgpro));
 
-    -- Get extensions, that we need to perform statements stats collection
+    -- Get extensions needed for statement statistics collection.
     FOR qres IN
-      SELECT * FROM dblink('server_connection',
-          'SELECT extname, '
-          'extnamespace::regnamespace::name AS extnamespace, '
-          'extversion '
-          'FROM pg_catalog.pg_extension '
-          'WHERE extname IN ('
-            '''pg_stat_statements'''
-          ')')
-        AS dbl(extname name, extnamespace name, extversion text)
+      SELECT
+        extname,
+        extnamespace::regnamespace::name AS extnamespace,
+        extversion
+      FROM pg_catalog.pg_extension
+      WHERE extname = 'pg_stat_statements'
     LOOP
       server_properties := jsonb_insert(server_properties,'{"extensions",0}',to_jsonb(qres));
     END LOOP;
 
-    -- Check system identifier
-    WITH remote AS (
-      SELECT
-        dbl.system_identifier
-      FROM dblink('server_connection',
-        'SELECT system_identifier '
-        'FROM pg_catalog.pg_control_system()'
-      ) AS dbl (system_identifier bigint)
-    )
-    SELECT min(reset_val::bigint) != (
-        SELECT
-          system_identifier
-        FROM remote
-      ) AS sysid_changed,
-      (
-        SELECT
-          s.server_name = 'local' AND cs.system_identifier != r.system_identifier
-        FROM
-          pg_catalog.pg_control_system() cs
-          CROSS JOIN remote r
-          JOIN servers s ON (s.server_id = sserver_id)
-      ) AS local_missmatch
+    -- Check the local cluster system identifier.
+    SELECT system_identifier
+      INTO STRICT observed_system_identifier
+    FROM pg_catalog.pg_control_system();
+
+    SELECT
+      min(reset_val::bigint) != observed_system_identifier AS sysid_changed,
+      is_local AND min(local_control.system_identifier) != observed_system_identifier AS local_missmatch
       INTO STRICT qres
     FROM sample_settings
+    CROSS JOIN pg_catalog.pg_control_system() AS local_control
     WHERE server_id = sserver_id AND name = 'system_identifier';
     IF qres.sysid_changed THEN
       RAISE 'Server system_identifier has changed! '
@@ -299,3 +235,9 @@ BEGIN
     RETURN server_properties;
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE FUNCTION init_sample(IN sserver_id integer)
+RETURNS jsonb
+SET search_path=@extschema@ AS $$
+  SELECT init_sample(sserver_id, false);
+$$ LANGUAGE sql;
