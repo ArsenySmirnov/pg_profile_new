@@ -43,6 +43,7 @@ SELECT import_sample_dabox($1::jsonb);
 
 - [Руководство по передаче и тестированию](docs/handoff-ru.md)
 - [JSON-контракт DABOX](docs/dabox-json-contract.md)
+- [Минимальный тестовый JSON для DABOX](docs/examples/dabox-snapshot-test.json)
 - [Оригинальная документация pg_profile](doc/pg_profile.md) — описывает upstream
   и в части удалённых возможностей к этому форку неприменима.
 

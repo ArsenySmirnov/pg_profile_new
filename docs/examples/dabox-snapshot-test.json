@@ -1,0 +1,96 @@
+{
+  "contract": "pg_profile.dabox.snapshot",
+  "contract_version": 1,
+  "event_id": "777777777777777777:1",
+  "created_at": "2026-09-04T12:10:05Z",
+  "source": {
+    "cluster_id": "777777777777777777",
+    "server_name": "local",
+    "server_created": "2026-09-04T12:00:00Z",
+    "pg_profile_version": "4.15"
+  },
+  "sequence": {
+    "sample_id": 1,
+    "previous_sample_id": null
+  },
+  "sample": {
+    "sample_time": "2026-09-04T12:10:00Z"
+  },
+  "content": {
+    "encoding": "pg_profile.export_data.rows",
+    "table_count": 3,
+    "row_count": 5,
+    "rows": [
+      {
+        "section_id": 0,
+        "row_data": {
+          "extension": "pg_profile",
+          "version": "4.15",
+          "tab_list_section": 1
+        }
+      },
+      {
+        "section_id": 1,
+        "row_data": [
+          {
+            "section_id": 2,
+            "relname": "servers"
+          },
+          {
+            "section_id": 3,
+            "relname": "samples"
+          },
+          {
+            "section_id": 4,
+            "relname": "sample_settings"
+          }
+        ]
+      },
+      {
+        "section_id": 2,
+        "row_data": {
+          "server_id": 1,
+          "server_name": "local",
+          "server_description": "Synthetic DABOX integration test",
+          "server_created": "2026-09-04T12:00:00Z",
+          "db_exclude": null,
+          "enabled": true,
+          "max_sample_age": 7,
+          "last_sample_id": 1,
+          "size_smp_wnd_start": null,
+          "size_smp_wnd_dur": null,
+          "size_smp_interval": null,
+          "srv_settings": {
+            "collect": {
+              "objects": false
+            }
+          }
+        }
+      },
+      {
+        "section_id": 3,
+        "row_data": {
+          "server_id": 1,
+          "sample_id": 1,
+          "sample_time": "2026-09-04T12:10:00Z"
+        }
+      },
+      {
+        "section_id": 4,
+        "row_data": {
+          "server_id": 1,
+          "first_seen": "2026-09-04T12:10:00Z",
+          "setting_scope": 2,
+          "name": "system_identifier",
+          "setting": "777777777777777777",
+          "reset_val": "777777777777777777",
+          "boot_val": "777777777777777777",
+          "unit": null,
+          "sourcefile": null,
+          "sourceline": null,
+          "pending_restart": false
+        }
+      }
+    ]
+  }
+}
